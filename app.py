@@ -690,39 +690,49 @@ with col_btn2:
             st.error("Informe seu nome para gerar o PDF.")
         else:
             with st.spinner("Gerando PDF..."):
-                dados_pdf = {
-                    "gestor": nome_gestor.strip(),
-                    "bcps": int(bcps_selecionado),
-                    "mes": mes_selecionado,
-                    "ano": 2026,
-                    "data": datetime.datetime.now().strftime("%d/%m/%Y"),
-                    "meta": row.get("META"),
-                    "realizado": row.get("FATURAMENTO"),
-                    "boletos_proj": row.get("BOLETOS_PROJ"),
-                    "bm_atual": row.get("BM"),
-                    "ib_atual": row.get("I/B"),
-                    "pm_atual": row.get("PM"),
-                    "bm_necessario": row.get("BM_NECESSARIO"),
-                    "ib_necessario": row.get("IB_NECESSARIO"),
-                    "pm_necessario": row.get("PM_NECESSARIO"),
-                    "sugestao": mensagem,
-                    "acao_bm": acao_bm.strip(),
-                    "acao_ib": acao_ib.strip(),
-                    "acao_pm": acao_pm.strip(),
-                    "acao_boletos": acao_boletos.strip(),
-                    "observacoes": observacoes.strip(),
-                    "historico_max": {
-                        "MAX_BM":      hist_row["MAX_BM"]      if hist_row is not None else None,
-                        "MAX_IB":      hist_row["MAX_IB"]      if hist_row is not None else None,
-                        "MAX_PM":      hist_row["MAX_PM"]      if hist_row is not None else None,
-                        "MAX_BOLETOS": hist_row["MAX_BOLETOS"] if hist_row is not None else None,
-                    },
-                }
                 mes_nome_pdf = NOMES_MESES.get(mes_selecionado, str(mes_selecionado))
-                # Guarda no session_state para o botão de download persistir após o rerun
-                st.session_state["pdf_bytes"] = gerar_pdf(dados_pdf)
-                st.session_state["pdf_nome"]  = f"plano_acao_loja{int(bcps_selecionado)}_{mes_nome_pdf}_2026.pdf"
-                st.session_state["pdf_chave"] = f"{bcps_selecionado}_{mes_selecionado}"
+                dados_pdf = {
+                    "gestor":      nome_gestor.strip(),
+                    "bcps":        int(bcps_selecionado),
+                    "mes":         mes_selecionado,
+                    "ano":         2026,
+                    "data":        datetime.datetime.now().strftime("%d/%m/%Y"),
+                    # Meta e projeção
+                    "meta":        meta,
+                    "boletos_proj": bol_proj,
+                    # Referência 2025
+                    "bm_ref":      bm_ref,
+                    "ib_ref":      ib_ref,
+                    "pm_ref":      pm_ref,
+                    "bol_ref":     bol_ref,
+                    # Necessários
+                    "bm_necessario":       bm_nec,
+                    "ib_necessario":       ib_nec,
+                    "pm_necessario":       pm_nec,
+                    "boletos_necessarios": bol_nec,
+                    # Cenário do simulador
+                    "sim_bol": float(st.session_state.get("sim_bol", bol_proj or 0)),
+                    "sim_ib":  float(st.session_state.get("sim_ib",  ib_ref  or 0)),
+                    "sim_pm":  float(st.session_state.get("sim_pm",  pm_ref  or 0)),
+                    "sim_bm":  float(st.session_state.get("sim_ib",  ib_ref  or 0)) *
+                               float(st.session_state.get("sim_pm",  pm_ref  or 0)),
+                    "sim_fat": float(st.session_state.get("sim_bol", bol_proj or 0)) *
+                               float(st.session_state.get("sim_ib",  ib_ref  or 0)) *
+                               float(st.session_state.get("sim_pm",  pm_ref  or 0)),
+                    # Sugestão e ações
+                    "sugestao":     mensagem,
+                    "acao_bm":      acao_bm.strip(),
+                    "acao_ib":      acao_ib.strip(),
+                    "acao_pm":      acao_pm.strip(),
+                    "acao_boletos": acao_boletos.strip(),
+                    "observacoes":  observacoes.strip(),
+                }
+                try:
+                    st.session_state["pdf_bytes"] = gerar_pdf(dados_pdf)
+                    st.session_state["pdf_nome"]  = f"plano_acao_loja{int(bcps_selecionado)}_{mes_nome_pdf}_2026.pdf"
+                    st.session_state["pdf_chave"] = f"{bcps_selecionado}_{mes_selecionado}"
+                except Exception as e:
+                    st.error(f"Erro ao gerar PDF: {e}")
 
 # Mostra o botão de download enquanto os bytes estiverem no session_state
 # (some automaticamente se trocar de loja/mês)
