@@ -88,7 +88,7 @@ def gerar_sugestao(row, hist_max_row):
             f"✅ **Meta factível — o BM de {fm(bm_nec)} já foi alcançado antes nesta loja** "
             f"(máx histórico: {fm(max_bm)}).\n\n"
             f"**Estratégia: garanta consistência nos dois vetores do BM:**\n"
-            f"- 📦 Mantenha I/B acima de **{formatar_numero(ib_nec)}** (atual: {formatar_numero(ib_at)})\n"
+            f"- 📦 Mantenha Itens por Boleto acima de **{formatar_numero(ib_nec)}** (atual: {formatar_numero(ib_at)})\n"
             f"- 💰 Mantenha Preço Médio acima de **{fm(pm_nec)}** (atual: {fm(pm_at)})\n"
             f"- 🏆 Reforce o desempenho da equipe com foco no mix de produtos de maior valor\n"
             f"- 📊 Acompanhe o BM diariamente para não perder ritmo no fim do mês"
@@ -100,14 +100,14 @@ def gerar_sugestao(row, hist_max_row):
             return "info", (
                 f"📦 **Priorize Itens por Boleto** — menor esforço relativo "
                 f"({formatar_pct(var_ib)} de aumento necessário).\n\n"
-                f"Meta: **{formatar_numero(ib_nec)} I/B** | Atual: {formatar_numero(ib_at)} | "
+                f"Meta: **{formatar_numero(ib_nec)} It/Boleto** | Atual: {formatar_numero(ib_at)} | "
                 f"Máx histórico: {formatar_numero(max_ib)}\n\n"
                 f"**Ações sugeridas:**\n"
                 f"- 🛍️ Treine a equipe em venda sugestiva: *\"Esse produto combina com...\"*\n"
                 f"- 🎁 Monte kits e combos com produtos complementares (ex.: perfume + hidratante)\n"
                 f"- 📍 Posicione itens de menor valor próximos ao produto principal\n"
                 f"- 🏆 Desafio de equipe: meta de {formatar_numero(ib_nec, 0)} itens por boleto\n"
-                f"- 📊 Monitore o I/B diariamente por vendedora para correção rápida"
+                f"- 📊 Monitore os Itens por Boleto diariamente por vendedora para correcao rapida"
             )
         else:
             return "info", (
@@ -127,13 +127,13 @@ def gerar_sugestao(row, hist_max_row):
     if ib_ok:
         msg = (
             f"📦 **Foque em Itens por Boleto** — PM necessário ({fm(pm_nec)}) "
-            f"está acima do histórico ({fm(max_pm)}), mas I/B de **{formatar_numero(ib_nec)}** "
-            f"é atingível (máx histórico: {formatar_numero(max_ib)}).\n\n"
-            f"**Ações para aumentar I/B ({formatar_pct(var_ib)} necessário):**\n"
+            f"está acima do histórico ({fm(max_pm)}), mas Itens por Boleto de **{formatar_numero(ib_nec)}** "
+            f"e atingivel (max historico: {formatar_numero(max_ib)}).\n\n"
+            f"**Acoes para aumentar Itens por Boleto ({formatar_pct(var_ib)} necessario):**\n"
             f"- 🛍️ Venda sugestiva ativa em todos os atendimentos\n"
             f"- 🎁 Kits e combos estratégicos com produtos complementares\n"
             f"- 📍 Visual merchandising estimulando compra de itens adicionais\n"
-            f"- 🏆 Ranking diário da equipe por I/B"
+            f"- 🏆 Ranking diario da equipe por Itens por Boleto"
         )
         if bol_ok and var_bol is not None:
             msg += (
@@ -147,7 +147,7 @@ def gerar_sugestao(row, hist_max_row):
     # ── Caso 4: Só PM é factível ──────────────────────────────────────────────
     if pm_ok:
         msg = (
-            f"💰 **Foque em Preço Médio** — I/B necessário ({formatar_numero(ib_nec)}) "
+            f"💰 **Foque em Preco Medio** — Itens por Boleto necessario ({formatar_numero(ib_nec)}) "
             f"está acima do histórico ({formatar_numero(max_ib)}), mas PM de **{fm(pm_nec)}** "
             f"é atingível (máx histórico: {fm(max_pm)}).\n\n"
             f"**Ações para aumentar PM ({formatar_pct(var_pm)} necessário):**\n"
@@ -169,7 +169,7 @@ def gerar_sugestao(row, hist_max_row):
     if bol_ok and var_bol is not None:
         return "info", (
             f"🚀 **Estratégia de volume: aumente o fluxo de clientes.**\n\n"
-            f"Os indicadores de qualidade (I/B e PM) estão além do histórico desta loja. "
+            f"Os indicadores de qualidade (Itens por Boleto e PM) estao alem do historico desta loja. "
             f"A rota mais realista é aumentar a quantidade de boletos.\n\n"
             f"Meta de boletos: **{formatar_numero(bol_nec, 0)}** "
             f"({formatar_pct(var_bol)} acima da projeção atual de {formatar_numero(bol_at, 0)}) "
@@ -199,7 +199,7 @@ def gerar_sugestao(row, hist_max_row):
         f"Nenhum indicador isolado atinge a meta dentro do histórico desta loja. "
         f"É preciso evoluir em múltiplas frentes ao mesmo tempo.\n\n"
         f"**Plano combinado sugerido:**\n"
-        f"- 📦 I/B: {formatar_numero(ib_at)} → **{formatar_numero(ib_nec)}** "
+        f"- 📦 Itens por Boleto: {formatar_numero(ib_at)} -> **{formatar_numero(ib_nec)}** "
         f"({formatar_pct(var_ib)}) com venda sugestiva e kits\n"
         f"- 💰 PM: {fm(pm_at)} → **{fm(pm_nec)}** "
         f"({formatar_pct(var_pm)}) com foco em mix premium e redução de descontos\n"
@@ -468,7 +468,7 @@ with sc3:
         help="Faturamento ÷ Qtd Itens",
     )
 with sc4:
-    # BM é derivado: I/B × PM
+    # BM é derivado: Itens por Boleto × Preço Médio
     sim_bm_calc = sim_ib * sim_pm
     st.metric(
         "Boleto Médio resultante",
@@ -534,7 +534,7 @@ if hist_row is not None:
         return "✅ Factível" if nec <= mx else "⚠️ Acima do histórico"
 
     tabela = pd.DataFrame({
-        "Indicador": ["BM (Boleto Médio)", "I/B (Itens/Boleto)", "PM (Preço Médio)", "Boletos"],
+        "Indicador": ["BM (Boleto Médio)", "Itens por Boleto", "PM (Preço Médio)", "Boletos"],
         "Atual": [
             formatar_moeda(row.get('BM')),
             formatar_numero(row.get('I/B')),
@@ -620,7 +620,7 @@ with col_pa1:
     )
 with col_pa2:
     acao_ib = st.text_area(
-        "Ação para Itens por Boleto (I/B)",
+        "Ação para Itens por Boleto",
         placeholder="Ex: Oferecer combo/sugestão de item complementar...",
         height=120,
         key="acao_ib",
