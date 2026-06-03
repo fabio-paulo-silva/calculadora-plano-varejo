@@ -39,7 +39,7 @@ def _detectar_col_mes(df: pd.DataFrame) -> str:
         cu = c.upper()
         # Normaliza para ASCII para comparar
         cu_ascii = cu.encode('ascii', errors='replace').decode('ascii').replace('?', '')
-        if cu_ascii in ('MS', 'MES', 'M S') or cu_ascii.startswith('M') and cu_ascii.endswith('S') and len(c) <= 4:
+        if cu_ascii in ('MS', 'MES', 'M S',"Mês") or cu_ascii.startswith('M') and cu_ascii.endswith('S') and len(c) <= 4:
             return c
     # Fallback: coluna com valores inteiros 1-12
     for c in df.columns:
@@ -111,7 +111,36 @@ def construir_analise(base: pd.DataFrame, metas: pd.DataFrame) -> pd.DataFrame:
     base_2025 = base[base['ANO'] == 2025].copy()
     base_2026 = base[base['ANO'] == 2026].copy()
 
-    df = base_2026.merge(
+    # Metas 2026 — ponto de partida (inclui meses futuros sem dados ainda)
+    if 'ANO' in metas.columns:
+        metas_2026 = metas[metas['ANO'] == 2026][['META', 'MES', 'BCPS']].copy()
+    else:
+        metas_2026 = metas[['META', 'MES', 'BCPS']].copy()
+
+    # Canais por BCPS (extraído do histórico 2025)
+    canais_bcps = base_2025[['CANAL', 'BCPS']].drop_duplicates()
+
+    # Scaffold: todos os BCPS×MES das metas × canais disponíveis
+    scaffold = (
+        metas_2026[['BCPS', 'MES']].drop_duplicates()
+        .merge(canais_bcps, on='BCPS', how='left')
+    )
+    scaffold['ANO'] = 2026
+
+    # Junta dados reais 2026 quando existirem (meses passados)
+    df = scaffold.merge(
+        base_2026[['CANAL', 'BCPS', 'MES', 'FATURAMENTO', 'BOLETOS', 'QTD ITENS']],
+        on=['CANAL', 'BCPS', 'MES'],
+        how='left',
+    )
+
+    # Calcula indicadores reais (NaN para meses sem dados)
+    df['BM']  = df['FATURAMENTO'] / df['BOLETOS']
+    df['I/B'] = df['QTD ITENS']   / df['BOLETOS']
+    df['PM']  = df['FATURAMENTO'] / df['QTD ITENS']
+
+    # Referência 2025
+    df = df.merge(
         base_2025[['CANAL', 'BCPS', 'MES', 'FATURAMENTO', 'BOLETOS', 'QTD ITENS', 'BM', 'I/B', 'PM']].rename(
             columns={
                 'FATURAMENTO': 'FAT_2025', 'BOLETOS': 'BOL_2025',
@@ -140,13 +169,8 @@ def construir_analise(base: pd.DataFrame, metas: pd.DataFrame) -> pd.DataFrame:
     )
     df['BOLETOS_PROJ'] = df['BOLETOS_PROJ'].fillna(df['BOL_2025'])
 
-    # Merge com metas (usa coluna MES normalizada)
-    if 'ANO' in metas.columns:
-        metas_ano = metas[metas['ANO'] == 2026][['META', 'MES', 'BCPS']]
-    else:
-        metas_ano = metas[['META', 'MES', 'BCPS']]
-
-    df = df.merge(metas_ano, on=['MES', 'BCPS'], how='left')
+    # Junta META (já filtrada para 2026 no scaffold, agora adiciona o valor)
+    df = df.merge(metas_2026, on=['MES', 'BCPS'], how='left')
 
     df['BM_NECESSARIO']       = df['META'] / df['BOLETOS_PROJ']
     df['IB_NECESSARIO']       = df['BM_NECESSARIO'] / df['PM']
