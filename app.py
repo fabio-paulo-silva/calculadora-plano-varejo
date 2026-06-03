@@ -479,7 +479,61 @@ with col3:
 
 st.divider()
 
-# ── Seção 3: Simulador combinado ──────────────────────────────────────────────
+# ── Seção 3: Sugestão ─────────────────────────────────────────────────────────
+
+st.markdown("#### 💡 Sugestão")
+
+tipo, mensagem = gerar_sugestao(row, hist_row)
+
+if tipo == "success":
+    st.success(mensagem)
+elif tipo == "info":
+    st.info(mensagem)
+else:
+    st.warning(mensagem)
+
+# Tabela comparativa com máximos históricos
+if hist_row is not None:
+    st.markdown("**Comparativo com máximo histórico da loja:**")
+    def _fact(nec_key, max_key, fmt="moeda"):
+        nec = _safe(row.get(nec_key))
+        mx  = _safe(hist_row.get(max_key))
+        if nec is None or mx is None:
+            return "—"
+        return "✅ Factível" if nec <= mx else "⚠️ Acima do histórico"
+
+    tabela = pd.DataFrame({
+        "Indicador": ["BM (Boleto Médio)", "Itens por Boleto", "PM (Preço Médio)", "Boletos"],
+        "Atual": [
+            formatar_moeda(row.get('BM')),
+            formatar_numero(row.get('I/B')),
+            formatar_moeda(row.get('PM')),
+            formatar_numero(row.get('BOLETOS_PROJ'), 0),
+        ],
+        "Necessário para meta": [
+            formatar_moeda(row.get('BM_NECESSARIO')),
+            formatar_numero(row.get('IB_NECESSARIO')),
+            formatar_moeda(row.get('PM_NECESSARIO')),
+            formatar_numero(row.get('BOLETOS_NECESSARIOS'), 0),
+        ],
+        "Máx histórico": [
+            formatar_moeda(hist_row.get('MAX_BM')),
+            formatar_numero(hist_row.get('MAX_IB')),
+            formatar_moeda(hist_row.get('MAX_PM')),
+            formatar_numero(hist_row.get('MAX_BOLETOS'), 0),
+        ],
+        "Factível?": [
+            _fact('BM_NECESSARIO',       'MAX_BM'),
+            _fact('IB_NECESSARIO',       'MAX_IB'),
+            _fact('PM_NECESSARIO',       'MAX_PM'),
+            _fact('BOLETOS_NECESSARIOS', 'MAX_BOLETOS'),
+        ],
+    })
+    st.dataframe(tabela, use_container_width=True, hide_index=True)
+
+st.divider()
+
+# ── Seção 4: Simulador combinado ──────────────────────────────────────────────
 
 st.markdown("#### 🔢 Simulador de Cenários")
 st.caption(
@@ -555,60 +609,6 @@ comp = pd.DataFrame({
     "Seu Cenário":      [formatar_numero(sim_bol, 0),   formatar_numero(sim_ib),  formatar_moeda(sim_pm),  formatar_moeda(sim_bm_calc), formatar_moeda(sim_fat)],
 })
 st.dataframe(comp, use_container_width=True, hide_index=True)
-
-st.divider()
-
-# ── Seção 4: Sugestão Inteligente ─────────────────────────────────────────────
-
-st.markdown("#### 💡 Sugestão Inteligente")
-
-tipo, mensagem = gerar_sugestao(row, hist_row)
-
-if tipo == "success":
-    st.success(mensagem)
-elif tipo == "info":
-    st.info(mensagem)
-else:
-    st.warning(mensagem)
-
-# Tabela comparativa com máximos históricos
-if hist_row is not None:
-    st.markdown("**Comparativo com máximo histórico da loja:**")
-    def _fact(nec_key, max_key, fmt="moeda"):
-        nec = _safe(row.get(nec_key))
-        mx  = _safe(hist_row.get(max_key))
-        if nec is None or mx is None:
-            return "—"
-        return "✅ Factível" if nec <= mx else "⚠️ Acima do histórico"
-
-    tabela = pd.DataFrame({
-        "Indicador": ["BM (Boleto Médio)", "Itens por Boleto", "PM (Preço Médio)", "Boletos"],
-        "Atual": [
-            formatar_moeda(row.get('BM')),
-            formatar_numero(row.get('I/B')),
-            formatar_moeda(row.get('PM')),
-            formatar_numero(row.get('BOLETOS_PROJ'), 0),
-        ],
-        "Necessário para meta": [
-            formatar_moeda(row.get('BM_NECESSARIO')),
-            formatar_numero(row.get('IB_NECESSARIO')),
-            formatar_moeda(row.get('PM_NECESSARIO')),
-            formatar_numero(row.get('BOLETOS_NECESSARIOS'), 0),
-        ],
-        "Máx histórico": [
-            formatar_moeda(hist_row.get('MAX_BM')),
-            formatar_numero(hist_row.get('MAX_IB')),
-            formatar_moeda(hist_row.get('MAX_PM')),
-            formatar_numero(hist_row.get('MAX_BOLETOS'), 0),
-        ],
-        "Factível?": [
-            _fact('BM_NECESSARIO',       'MAX_BM'),
-            _fact('IB_NECESSARIO',       'MAX_IB'),
-            _fact('PM_NECESSARIO',       'MAX_PM'),
-            _fact('BOLETOS_NECESSARIOS', 'MAX_BOLETOS'),
-        ],
-    })
-    st.dataframe(tabela, use_container_width=True, hide_index=True)
 
 st.divider()
 
