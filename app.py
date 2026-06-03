@@ -444,7 +444,9 @@ with col1:
         formatar_numero(ib_nec),
         delta=esforco,
         delta_color="inverse",
-        help="Mantendo o Preço Médio de 2025",
+    )
+    st.caption(
+        f"🧮 {fm(bm_nec)} (BM nec.) ÷ {fm(pm_ref)} (PM 2025) = **{formatar_numero(ib_nec)}**"
     )
     st.caption(f"2025: {formatar_numero(ib_ref)}  |  Máx histórico: {formatar_numero(max_ib)}")
     st.markdown(badge)
@@ -458,7 +460,9 @@ with col2:
         formatar_moeda(pm_nec),
         delta=esforco,
         delta_color="inverse",
-        help="Mantendo os Itens por Boleto de 2025",
+    )
+    st.caption(
+        f"🧮 {fm(bm_nec)} (BM nec.) ÷ {formatar_numero(ib_ref)} (It/Bol 2025) = **{fm(pm_nec)}**"
     )
     st.caption(f"2025: {fm(pm_ref)}  |  Máx histórico: {fm(max_pm)}")
     st.markdown(badge)
@@ -472,7 +476,9 @@ with col3:
         formatar_numero(bol_nec, 0),
         delta=esforco,
         delta_color="inverse",
-        help="Mantendo o BM de 2025 — atrair mais clientes",
+    )
+    st.caption(
+        f"🧮 {fm(meta)} (Meta) ÷ {fm(bm_ref)} (BM 2025) = **{formatar_numero(bol_nec, 0)}**"
     )
     st.caption(f"2025: {formatar_numero(bol_ref, 0)}  |  Máx histórico: {formatar_numero(max_bol, 0)}")
     st.markdown(badge)
