@@ -278,7 +278,7 @@ with st.sidebar:
         key="f_bcps",
     )
 
-    meses_disponiveis = sorted(analise[analise['BCPS'] == bcps_selecionado]['Mês'].unique().tolist())
+    meses_disponiveis = sorted(analise[analise['BCPS'] == bcps_selecionado]['MES'].unique().tolist())
     mes_selecionado = st.selectbox(
         "Mês de Análise",
         options=meses_disponiveis,
