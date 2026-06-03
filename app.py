@@ -373,11 +373,11 @@ st.markdown("#### 📊 Caminhos para Atingir a Meta")
 bm_delta_str = f"{formatar_pct((bm_nec/bm_ref)-1)} vs 2025" if bm_ref and bm_nec else ""
 badge_bm = _badge(bm_nec, max_bm)
 st.info(
-    f"**Boleto Médio necessário: {formatar_moeda(bm_nec)}** "
+    f"**Boleto Médio necessário: {fm(bm_nec)}** "
     f"{'(' + bm_delta_str + ')' if bm_delta_str else ''}  {badge_bm}\n\n"
     f"Com **{formatar_numero(bol_proj, 0)} boletos projetados**, você precisa de um BM de "
-    f"**{formatar_moeda(bm_nec)}** para atingir a meta de **{formatar_moeda(meta)}**. "
-    f"Referência 2025: {formatar_moeda(bm_ref)}."
+    f"**{fm(bm_nec)}** para atingir a meta de **{fm(meta)}**. "
+    f"Referência 2025: {fm(bm_ref)}."
 )
 
 st.caption("Escolha um caminho — ou combine-os no Simulador abaixo:")
@@ -494,9 +494,9 @@ else:
     icone = "🔴"
 
 getattr(st, cor)(
-    f"{icone} **Faturamento projetado: {formatar_moeda(sim_fat)}** "
+    f"{icone} **Faturamento projetado: {fm(sim_fat)}** "
     f"— {pct_sim:.1f}% da meta "
-    f"({'sobra ' if gap_sim >= 0 else 'faltam '}{formatar_moeda(abs(gap_sim))})"
+    f"({'sobra ' if gap_sim >= 0 else 'faltam '}{fm(abs(gap_sim))})"
 )
 
 # Mini-tabela comparando cenário vs necessário
