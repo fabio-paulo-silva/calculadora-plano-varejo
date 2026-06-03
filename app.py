@@ -409,7 +409,7 @@ with col2:
         delta_color="inverse",
         help="Mantendo os Itens por Boleto de 2025",
     )
-    st.caption(f"2025: {formatar_moeda(pm_ref)}  |  Máx histórico: {formatar_moeda(max_pm)}")
+    st.caption(f"2025: {fm(pm_ref)}  |  Máx histórico: {fm(max_pm)}")
     st.markdown(badge)
 
 with col3:
