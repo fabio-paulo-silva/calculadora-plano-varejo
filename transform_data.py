@@ -118,12 +118,36 @@ def historico_max_por_bcps(base: pd.DataFrame) -> pd.DataFrame:
     )
 
 
+def preparar_dcentros(dcentros: pd.DataFrame) -> pd.DataFrame:
+    """Renomeia colunas com acentos e retorna apenas as colunas relevantes."""
+    # Detecta nomes reais das colunas com caracteres especiais
+    col_praca = next((c for c in dcentros.columns if 'PRA' in c.upper()), None)
+    col_gcvo  = next((c for c in dcentros.columns if 'GCVO' in c.upper()), None)
+
+    colunas_map = {'BCPS': 'BCPS', 'LOJA': 'LOJA', 'GVO': 'GVO', 'GRVO': 'GRVO'}
+    if col_praca:
+        colunas_map[col_praca] = 'PRACA'
+    if col_gcvo:
+        colunas_map[col_gcvo] = 'GCVO'
+
+    df = dcentros[[c for c in colunas_map if c in dcentros.columns]].copy()
+    df = df.rename(columns=colunas_map)
+    df['BCPS'] = pd.to_numeric(df['BCPS'], errors='coerce')
+    return df.dropna(subset=['BCPS']).drop_duplicates(subset=['BCPS'])
+
+
 def carregar_tudo():
-    metas_raw, raw_data, dcentros = load_data_url()
-    metas = tratar_metas(metas_raw)
+    metas_raw, raw_data, dcentros_raw = load_data_url()
+    metas    = tratar_metas(metas_raw)
     df_varejo = tratar_dados_varejo(raw_data)
-    base = agrupar_mensal(df_varejo)
-    base = calcular_indicadores(base)
-    analise = construir_analise(base, metas)
+    base     = agrupar_mensal(df_varejo)
+    base     = calcular_indicadores(base)
+    analise  = construir_analise(base, metas)
     hist_max = historico_max_por_bcps(base)
-    return analise, hist_max, metas, base
+    dcentros = preparar_dcentros(dcentros_raw)
+
+    # Enriquece analise com hierarquia geográfica/comercial
+    analise = analise.merge(dcentros[['BCPS', 'LOJA', 'PRACA', 'GVO', 'GCVO', 'GRVO']],
+                            on='BCPS', how='left')
+
+    return analise, hist_max, metas, base, dcentros

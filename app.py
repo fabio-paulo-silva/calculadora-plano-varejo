@@ -17,7 +17,7 @@ st.set_page_config(page_title="Calculadora de Metas", layout="wide", page_icon="
 
 @st.cache_data(ttl=3600, show_spinner="Carregando dados...")
 def load_data():
-    return carregar_tudo()
+    return carregar_tudo()   # retorna: analise, hist_max, metas, base, dcentros
 
 
 def formatar_moeda(valor):
@@ -222,7 +222,7 @@ if "pdf_chave" not in st.session_state:
     st.session_state["pdf_chave"] = None   # identifica loja+mês do PDF gerado
 
 try:
-    analise, hist_max, metas, base = load_data()
+    analise, hist_max, metas, base, dcentros = load_data()
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
@@ -232,11 +232,50 @@ except Exception as e:
 with st.sidebar:
     st.header("Filtros")
 
-    lojas_disponiveis = sorted(analise['BCPS'].dropna().unique().astype(int).tolist())
+    # ── Filtros de hierarquia (cascata) ───────────────────────────────────────
+    def _opcoes(col, df):
+        return ["Todos"] + sorted(df[col].dropna().unique().tolist())
+
+    dc = dcentros.copy()
+
+    grvo_sel = st.selectbox("Regional (GRVO)", _opcoes('GRVO', dc), key="f_grvo")
+    if grvo_sel != "Todos":
+        dc = dc[dc['GRVO'] == grvo_sel]
+
+    gcvo_sel = st.selectbox("Coordenador (GCVO)", _opcoes('GCVO', dc), key="f_gcvo")
+    if gcvo_sel != "Todos":
+        dc = dc[dc['GCVO'] == gcvo_sel]
+
+    gvo_sel = st.selectbox("Gestor (GVO)", _opcoes('GVO', dc), key="f_gvo")
+    if gvo_sel != "Todos":
+        dc = dc[dc['GVO'] == gvo_sel]
+
+    praca_sel = st.selectbox("Praça", _opcoes('PRACA', dc), key="f_praca")
+    if praca_sel != "Todos":
+        dc = dc[dc['PRACA'] == praca_sel]
+
+    # Filtra BCPS disponíveis pelo que sobrou na hierarquia
+    bcps_hierarquia = set(dc['BCPS'].astype(int).tolist())
+    lojas_disponiveis = sorted([
+        b for b in analise['BCPS'].dropna().unique().astype(int).tolist()
+        if b in bcps_hierarquia
+    ])
+
+    if not lojas_disponiveis:
+        st.warning("Nenhuma loja encontrada para essa combinação de filtros.")
+        st.stop()
+
+    # Formata label da loja com nome se disponível
+    loja_map = dcentros.set_index('BCPS')['LOJA'].to_dict()
+    def _label_loja(bcps):
+        nome = loja_map.get(int(bcps), "")
+        return f"{int(bcps)} — {nome}" if nome else f"Loja {int(bcps)}"
+
     bcps_selecionado = st.selectbox(
         "Loja (BCPS)",
         options=lojas_disponiveis,
-        format_func=lambda x: f"Loja {int(x)}",
+        format_func=_label_loja,
+        key="f_bcps",
     )
 
     meses_disponiveis = sorted(analise[analise['BCPS'] == bcps_selecionado]['Mês'].unique().tolist())
@@ -256,6 +295,16 @@ with st.sidebar:
     else:
         canal_selecionado = canais_disponiveis[0] if canais_disponiveis else "Todos"
 
+    # Info da loja selecionada
+    loja_info = dcentros[dcentros['BCPS'] == int(bcps_selecionado)]
+    if not loja_info.empty:
+        li = loja_info.iloc[0]
+        st.markdown("---")
+        st.caption(f"**{li.get('LOJA','')}**")
+        st.caption(f"Praça: {li.get('PRACA','')}  |  GVO: {li.get('GVO','')}")
+        st.caption(f"GCVO: {li.get('GCVO','')}  |  GRVO: {li.get('GRVO','')}")
+
+    st.markdown("---")
     if st.button("🔄 Atualizar dados", use_container_width=True):
         st.cache_data.clear()
         st.rerun()
@@ -307,7 +356,9 @@ hist_row = hist_row_df.iloc[0] if not hist_row_df.empty else None
 
 # ── Cabeçalho ─────────────────────────────────────────────────────────────────
 
-st.subheader(f"Loja {int(bcps_selecionado)} — {NOMES_MESES.get(mes_selecionado, mes_selecionado)} 2026")
+nome_loja = loja_map.get(int(bcps_selecionado), "")
+titulo_loja = f"{int(bcps_selecionado)} — {nome_loja}" if nome_loja else f"Loja {int(bcps_selecionado)}"
+st.subheader(f"{titulo_loja}  ·  {NOMES_MESES.get(mes_selecionado, mes_selecionado)} 2026")
 
 # ── Seção 1: Planejamento da Meta ────────────────────────────────────────────
 
