@@ -491,32 +491,29 @@ sc1, sc2, sc3, sc4 = st.columns(4)
 
 with sc1:
     sim_bol = st.number_input(
-        "Boletos",
+        f"Boletos  (padrão: boletos projetados = {formatar_numero(bol_proj, 0)})",
         min_value=1,
         value=int(bol_proj or bol_ref or 100),
         step=5,
         key="sim_bol",
-        help=f"Default: boletos projetados para o mês ({formatar_numero(bol_proj, 0)})",
     )
 with sc2:
     sim_ib = st.number_input(
-        "Itens por Boleto",
+        f"Itens por Boleto  (padrão: realizado em {NOMES_MESES.get(mes_selecionado,'')} 2025 = {formatar_numero(ib_ref)})",
         min_value=0.1,
         value=round(float(ib_ref or 2.0), 1),
         step=0.1,
         format="%.1f",
         key="sim_ib",
-        help=f"Default: mesmo mês de 2025 ({formatar_numero(ib_ref)})",
     )
 with sc3:
     sim_pm = st.number_input(
-        "Preço Médio (R$)",
+        f"Preço Médio  (padrão: realizado em {NOMES_MESES.get(mes_selecionado,'')} 2025 = {formatar_moeda(pm_ref)})",
         min_value=1.0,
         value=round(float(pm_ref or 50.0), 0),
         step=1.0,
         format="%.0f",
         key="sim_pm",
-        help=f"Default: mesmo mês de 2025 ({formatar_moeda(pm_ref)})",
     )
 with sc4:
     # BM é derivado: Itens por Boleto × Preço Médio
