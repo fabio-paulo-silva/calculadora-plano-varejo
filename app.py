@@ -287,7 +287,7 @@ with st.sidebar:
     )
 
     canais_disponiveis = analise[
-        (analise['BCPS'] == bcps_selecionado) & (analise['Mês'] == mes_selecionado)
+        (analise['BCPS'] == bcps_selecionado) & (analise['MES'] == mes_selecionado)
     ]['CANAL'].unique().tolist()
 
     if len(canais_disponiveis) > 1:
@@ -311,7 +311,7 @@ with st.sidebar:
 
 # ── Filtrar linha de análise ──────────────────────────────────────────────────
 
-mask = (analise['BCPS'] == bcps_selecionado) & (analise['Mês'] == mes_selecionado)
+mask = (analise['BCPS'] == bcps_selecionado) & (analise['MES'] == mes_selecionado)
 if canal_selecionado != "Todos":
     mask = mask & (analise['CANAL'] == canal_selecionado)
 
@@ -325,7 +325,7 @@ if df_linha.empty:
 if len(df_linha) > 1:
     row = {
         'BCPS': bcps_selecionado,
-        'Mês': mes_selecionado,
+        'MES': mes_selecionado,
         'FATURAMENTO': df_linha['FATURAMENTO'].sum(),
         'BOLETOS': df_linha['BOLETOS'].sum(),
         'QTD ITENS': df_linha['QTD ITENS'].sum(),
@@ -623,15 +623,15 @@ with st.expander("📊 Ver evolução mensal da loja em 2026"):
         mask_loja = mask_loja & (analise['CANAL'] == canal_selecionado)
 
     df_evolucao = analise[mask_loja].copy()
-    df_evolucao['Mês Nome'] = df_evolucao['Mês'].map(NOMES_MESES)
+    df_evolucao['MES_NOME'] = df_evolucao['MES'].map(NOMES_MESES)
 
-    cols_exibir = ['Mês Nome', 'FATURAMENTO', 'BOLETOS', 'BM', 'I/B', 'PM',
+    cols_exibir = ['MES_NOME', 'FATURAMENTO', 'BOLETOS', 'BM', 'I/B', 'PM',
                    'META', 'BOLETOS_PROJ', 'BM_NECESSARIO']
     cols_existentes = [c for c in cols_exibir if c in df_evolucao.columns]
 
     df_show = df_evolucao[cols_existentes].copy()
     df_show = df_show.rename(columns={
-        'Mês Nome': 'Mês', 'FATURAMENTO': 'Faturamento', 'BOLETOS': 'Boletos',
+        'MES_NOME': 'Mes', 'FATURAMENTO': 'Faturamento', 'BOLETOS': 'Boletos',
         'META': 'Meta', 'BOLETOS_PROJ': 'Bol. Proj.', 'BM_NECESSARIO': 'BM Nec.',
     })
 
