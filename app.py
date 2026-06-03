@@ -344,139 +344,169 @@ with col3:
 
 st.divider()
 
-# ── Seção 2: Indicadores necessários vs referência 2025 ──────────────────────
-
-st.markdown("#### 📊 Indicadores Necessários para Atingir a Meta")
-st.caption("Referência: mesmo mês de 2025. Cada coluna mostra o que precisa ser feito e o esforço relativo.")
-
-col1, col2, col3, col4 = st.columns(4)
+# ── Seção 2: Caminhos para atingir a meta ─────────────────────────────────────
 
 def _delta_inv(nec, ref):
     if nec is None or ref is None or ref == 0:
         return None
     return formatar_pct((nec / ref) - 1) + " vs 2025"
 
+def _badge(nec, max_val):
+    """Retorna emoji + texto de factibilidade baseado no histórico máximo."""
+    if nec is None or max_val is None:
+        return ""
+    if nec <= max_val:
+        return "✅ Já foi alcançado antes"
+    pct_acima = (nec / max_val - 1) * 100
+    if pct_acima <= 15:
+        return "🟡 Levemente acima do histórico"
+    return "🔴 Acima do histórico"
+
+max_ib  = _safe(hist_row.get('MAX_IB'))  if hist_row is not None else None
+max_pm  = _safe(hist_row.get('MAX_PM'))  if hist_row is not None else None
+max_bol = _safe(hist_row.get('MAX_BOLETOS')) if hist_row is not None else None
+max_bm  = _safe(hist_row.get('MAX_BM'))  if hist_row is not None else None
+
+st.markdown("#### 📊 Caminhos para Atingir a Meta")
+
+# Destaque do BM como objetivo central
+bm_delta_str = f"{formatar_pct((bm_nec/bm_ref)-1)} vs 2025" if bm_ref and bm_nec else ""
+badge_bm = _badge(bm_nec, max_bm)
+st.info(
+    f"**Boleto Médio necessário: {formatar_moeda(bm_nec)}** "
+    f"{'(' + bm_delta_str + ')' if bm_delta_str else ''}  {badge_bm}\n\n"
+    f"Com **{formatar_numero(bol_proj, 0)} boletos projetados**, você precisa de um BM de "
+    f"**{formatar_moeda(bm_nec)}** para atingir a meta de **{formatar_moeda(meta)}**. "
+    f"Referência 2025: {formatar_moeda(bm_ref)}."
+)
+
+st.caption("Escolha um caminho — ou combine-os no Simulador abaixo:")
+
+col1, col2, col3 = st.columns(3)
+
 with col1:
+    badge = _badge(ib_nec, max_ib)
+    esforco = _delta_inv(ib_nec, ib_ref)
+    st.markdown(f"**📦 Caminho 1 — Itens por Boleto**")
     st.metric(
-        "Boleto Médio",
-        formatar_moeda(bm_nec),
-        delta=_delta_inv(bm_nec, bm_ref),
-        delta_color="inverse",
-        help="Meta ÷ Boletos Projetados",
-    )
-    if bm_ref:
-        st.caption(f"Referência 2025: {formatar_moeda(bm_ref)}")
-with col2:
-    st.metric(
-        "Itens por Boleto",
+        "Meta de Itens por Boleto",
         formatar_numero(ib_nec),
-        delta=_delta_inv(ib_nec, ib_ref),
+        delta=esforco,
         delta_color="inverse",
-        help="BM Necessário ÷ Preço Médio 2025 (mantendo PM de referência)",
+        help="Mantendo o Preço Médio de 2025",
     )
-    if ib_ref:
-        st.caption(f"Referência 2025: {formatar_numero(ib_ref)}")
-with col3:
+    st.caption(f"2025: {formatar_numero(ib_ref)}  |  Máx histórico: {formatar_numero(max_ib)}")
+    st.markdown(badge)
+
+with col2:
+    badge = _badge(pm_nec, max_pm)
+    esforco = _delta_inv(pm_nec, pm_ref)
+    st.markdown(f"**💰 Caminho 2 — Preço Médio**")
     st.metric(
-        "Preço Médio",
+        "Meta de Preço Médio",
         formatar_moeda(pm_nec),
-        delta=_delta_inv(pm_nec, pm_ref),
+        delta=esforco,
         delta_color="inverse",
-        help="BM Necessário ÷ Itens por Boleto 2025 (mantendo I/B de referência)",
+        help="Mantendo os Itens por Boleto de 2025",
     )
-    if pm_ref:
-        st.caption(f"Referência 2025: {formatar_moeda(pm_ref)}")
-with col4:
+    st.caption(f"2025: {formatar_moeda(pm_ref)}  |  Máx histórico: {formatar_moeda(max_pm)}")
+    st.markdown(badge)
+
+with col3:
+    badge = _badge(bol_nec, max_bol)
+    esforco = _delta_inv(bol_nec, bol_ref)
+    st.markdown(f"**🚀 Caminho 3 — Aumentar Boletos**")
     st.metric(
-        "Boletos (se BM = 2025)",
+        "Meta de Boletos",
         formatar_numero(bol_nec, 0),
-        delta=_delta_inv(bol_nec, bol_ref),
+        delta=esforco,
         delta_color="inverse",
-        help="Meta ÷ BM de 2025 — boletos necessários mantendo o BM do ano passado",
+        help="Mantendo o BM de 2025 — atrair mais clientes",
     )
-    if bol_ref:
-        st.caption(f"Referência 2025: {formatar_numero(bol_ref, 0)}")
+    st.caption(f"2025: {formatar_numero(bol_ref, 0)}  |  Máx histórico: {formatar_numero(max_bol, 0)}")
+    st.markdown(badge)
 
 st.divider()
 
-# ── Seção 3: Simulador what-if ────────────────────────────────────────────────
+# ── Seção 3: Simulador combinado ──────────────────────────────────────────────
 
-st.markdown("#### 🔢 Simulador — E se eu melhorar um indicador?")
-st.caption("Defina o valor que você pretende alcançar em um indicador e veja o que os outros precisam ser.")
+st.markdown("#### 🔢 Simulador de Cenários")
+st.caption(
+    "Ajuste qualquer combinação de indicadores e veja o faturamento projetado. "
+    "**Faturamento = Boletos × Itens por Boleto × Preço Médio**"
+)
 
-sim_col1, sim_col2, sim_col3 = st.columns([1, 1, 2])
+sc1, sc2, sc3, sc4 = st.columns(4)
 
-with sim_col1:
-    indicador_fixo = st.selectbox(
-        "Indicador que você vai definir",
-        ["Itens por Boleto", "Preço Médio", "Boleto Médio", "Boletos"],
-        key="sim_indicador",
+with sc1:
+    sim_bol = st.number_input(
+        "Boletos",
+        min_value=1,
+        value=int(bol_proj or bol_ref or 100),
+        step=5,
+        key="sim_bol",
+        help="Quantidade de transações no mês",
+    )
+with sc2:
+    sim_ib = st.number_input(
+        "Itens por Boleto",
+        min_value=0.1,
+        value=round(float(ib_ref or 2.0), 1),
+        step=0.1,
+        format="%.1f",
+        key="sim_ib",
+        help="Média de itens vendidos por transação",
+    )
+with sc3:
+    sim_pm = st.number_input(
+        "Preço Médio (R$)",
+        min_value=1.0,
+        value=round(float(pm_ref or 50.0), 0),
+        step=1.0,
+        format="%.0f",
+        key="sim_pm",
+        help="Faturamento ÷ Qtd Itens",
+    )
+with sc4:
+    # BM é derivado: I/B × PM
+    sim_bm_calc = sim_ib * sim_pm
+    st.metric(
+        "Boleto Médio resultante",
+        formatar_moeda(sim_bm_calc),
+        delta=_delta_inv(sim_bm_calc, bm_ref),
+        delta_color="normal",
+        help="Calculado automaticamente: Itens por Boleto × Preço Médio",
     )
 
-with sim_col2:
-    if indicador_fixo == "Itens por Boleto":
-        val_ref = ib_ref or 0.0
-        sim_val = st.number_input("Meta de Itens por Boleto", min_value=0.0,
-                                  value=round(float(val_ref), 1), step=0.1, format="%.1f")
-    elif indicador_fixo == "Preço Médio":
-        val_ref = pm_ref or 0.0
-        sim_val = st.number_input("Meta de Preço Médio (R$)", min_value=0.0,
-                                  value=round(float(val_ref), 0), step=1.0, format="%.0f")
-    elif indicador_fixo == "Boleto Médio":
-        val_ref = bm_ref or 0.0
-        sim_val = st.number_input("Meta de Boleto Médio (R$)", min_value=0.0,
-                                  value=round(float(val_ref), 0), step=1.0, format="%.0f")
-    else:
-        val_ref = bol_ref or 0.0
-        sim_val = st.number_input("Meta de Boletos", min_value=0,
-                                  value=int(val_ref), step=10)
+# Resultado do cenário
+sim_fat = sim_bol * sim_bm_calc
+pct_sim = (sim_fat / meta * 100) if meta else 0
+gap_sim = sim_fat - meta if meta else 0
 
-with sim_col3:
-    if meta and sim_val and sim_val > 0:
-        if indicador_fixo == "Itens por Boleto":
-            sim_bm  = meta / bol_proj if bol_proj else None
-            sim_pm  = sim_bm / sim_val if sim_bm else None
-            sim_bol = bol_proj
-            label   = f"Com **{formatar_numero(sim_val)} Itens por Boleto**:"
-            r1 = ("Boleto Médio necessário",  formatar_moeda(sim_bm),  _delta_inv(sim_bm, bm_ref))
-            r2 = ("Preço Médio necessário",   formatar_moeda(sim_pm),  _delta_inv(sim_pm, pm_ref))
-            r3 = ("Boletos projetados",       formatar_numero(sim_bol, 0), None)
+if pct_sim >= 100:
+    cor = "success"
+    icone = "✅"
+elif pct_sim >= 90:
+    cor = "warning"
+    icone = "🟡"
+else:
+    cor = "error"
+    icone = "🔴"
 
-        elif indicador_fixo == "Preço Médio":
-            sim_bm  = meta / bol_proj if bol_proj else None
-            sim_ib  = sim_bm / sim_val if sim_bm else None
-            sim_bol = bol_proj
-            label   = f"Com **{formatar_moeda(sim_val)} de Preço Médio**:"
-            r1 = ("Boleto Médio necessário",       formatar_moeda(sim_bm),  _delta_inv(sim_bm, bm_ref))
-            r2 = ("Itens por Boleto necessário",   formatar_numero(sim_ib), _delta_inv(sim_ib, ib_ref))
-            r3 = ("Boletos projetados",            formatar_numero(sim_bol, 0), None)
+getattr(st, cor)(
+    f"{icone} **Faturamento projetado: {formatar_moeda(sim_fat)}** "
+    f"— {pct_sim:.1f}% da meta "
+    f"({'sobra ' if gap_sim >= 0 else 'faltam '}{formatar_moeda(abs(gap_sim))})"
+)
 
-        elif indicador_fixo == "Boleto Médio":
-            sim_ib  = sim_val / pm_ref if pm_ref else None
-            sim_pm  = sim_val / ib_ref if ib_ref else None
-            sim_bol = meta / sim_val
-            label   = f"Com **{formatar_moeda(sim_val)} de Boleto Médio**:"
-            r1 = ("Itens por Boleto necessário",  formatar_numero(sim_ib), _delta_inv(sim_ib, ib_ref))
-            r2 = ("Preço Médio necessário",        formatar_moeda(sim_pm),  _delta_inv(sim_pm, pm_ref))
-            r3 = ("Boletos necessários",           formatar_numero(sim_bol, 0), _delta_inv(sim_bol, bol_ref))
-
-        else:  # Boletos
-            sim_bm  = meta / sim_val
-            sim_ib  = sim_bm / pm_ref if pm_ref else None
-            sim_pm  = sim_bm / ib_ref if ib_ref else None
-            label   = f"Com **{formatar_numero(sim_val, 0)} Boletos**:"
-            r1 = ("Boleto Médio necessário",      formatar_moeda(sim_bm),  _delta_inv(sim_bm, bm_ref))
-            r2 = ("Itens por Boleto necessário",  formatar_numero(sim_ib), _delta_inv(sim_ib, ib_ref))
-            r3 = ("Preço Médio necessário",        formatar_moeda(sim_pm),  _delta_inv(sim_pm, pm_ref))
-
-        st.markdown(label)
-        c1, c2, c3 = st.columns(3)
-        with c1:
-            st.metric(r1[0], r1[1], delta=r1[2], delta_color="inverse")
-        with c2:
-            st.metric(r2[0], r2[1], delta=r2[2], delta_color="inverse")
-        with c3:
-            st.metric(r3[0], r3[1], delta=r3[2], delta_color="inverse" if r3[2] else "normal")
+# Mini-tabela comparando cenário vs necessário
+comp = pd.DataFrame({
+    "Indicador":        ["Boletos", "Itens por Boleto", "Preço Médio", "Boleto Médio", "Faturamento"],
+    "Referência 2025":  [formatar_numero(bol_ref, 0),   formatar_numero(ib_ref),  formatar_moeda(pm_ref),  formatar_moeda(bm_ref),  "—"],
+    "Necessário p/ meta": [formatar_numero(bol_nec, 0), formatar_numero(ib_nec),  formatar_moeda(pm_nec),  formatar_moeda(bm_nec),  formatar_moeda(meta)],
+    "Seu Cenário":      [formatar_numero(sim_bol, 0),   formatar_numero(sim_ib),  formatar_moeda(sim_pm),  formatar_moeda(sim_bm_calc), formatar_moeda(sim_fat)],
+})
+st.dataframe(comp, use_container_width=True, hide_index=True)
 
 st.divider()
 
