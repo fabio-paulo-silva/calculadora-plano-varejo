@@ -111,42 +111,56 @@ def _get_client():
 # ── Geração do plano inicial ──────────────────────────────────────────────────
 
 def gerar_plano_inicial(dados: dict) -> str:
-    """Gera o plano de ação inicial enxuto com base nos dados da loja."""
+    """Gera o plano de ação inicial personalizado e enxuto para a loja."""
+
     foco_map = {
-        "combinado": "combinação das alavancas mais factíveis",
+        "combinado": "alavancas mais factíveis para esta loja",
         "bm":        "Boleto Médio",
         "ib":        "Itens por Boleto",
         "pm":        "Preço Médio",
-        "boletos":   "aumento de Boletos (fluxo)",
+        "boletos":   "aumento de Boletos",
     }
-    foco = foco_map.get(dados.get("foco", "combinado"), "combinação das alavancas mais factíveis")
+    foco = foco_map.get(dados.get("foco", "combinado"), "alavancas mais factíveis")
 
-    prompt_usuario = f"""Com base nos dados desta loja, gere um plano de ação com foco em **{foco}**.
+    # Monta bloco de metas específicas da loja para o prompt
+    def _fact_txt(nec, mx):
+        try:
+            return "✅ já atingido antes" if float(nec) <= float(mx) else f"🔴 {(float(nec)/float(mx)-1)*100:.0f}% acima do histórico"
+        except Exception:
+            return ""
 
-Estrutura obrigatória (use exatamente estes títulos em markdown):
+    metas_loja = f"""**Metas específicas desta loja para {dados.get('mes_nome','')}/{dados.get('bcps','')}:**
+- Boleto Médio necessário: **{_fmt_moeda(dados.get('bm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('bm_ref'))}, var. {_fmt_pct(dados.get('var_bm'))}) — {_fact_txt(dados.get('bm_nec'), dados.get('max_bm'))}
+- Itens por Boleto necessário: **{_fmt_num(dados.get('ib_nec'))}** (ref. 2025: {_fmt_num(dados.get('ib_ref'))}, var. {_fmt_pct(dados.get('var_ib'))}) — {_fact_txt(dados.get('ib_nec'), dados.get('max_ib'))}
+- Preço Médio necessário: **{_fmt_moeda(dados.get('pm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('pm_ref'))}, var. {_fmt_pct(dados.get('var_pm'))}) — {_fact_txt(dados.get('pm_nec'), dados.get('max_pm'))}
+- Boletos necessários: **{_fmt_num(dados.get('bol_nec'),0)}** (ref. 2025: {_fmt_num(dados.get('bol_ref'),0)}, var. {_fmt_pct(dados.get('var_bol'))}) — {_fact_txt(dados.get('bol_nec'), dados.get('max_bol'))}
+- Meta do mês: **{_fmt_moeda(dados.get('meta'))}**"""
+
+    prompt_usuario = f"""{metas_loja}
+
+Gere um plano de ação PERSONALIZADO para esta loja, focado em **{foco}**.
+
+Use EXATAMENTE estes 4 títulos em markdown (nada mais):
 
 ### Diagnóstico
-2 frases: qual o gap principal e o caminho mais realista.
+1 frase: o que está fora do histórico e o caminho mais realista baseado nos números acima.
 
 ### Ação para Boleto Médio
-3 ações práticas e específicas para esta loja. Mencione os indicadores IAF impactados pelo nome.
+2 ações diretas e específicas para atingir {_fmt_moeda(dados.get('bm_nec'))}. Cite impacto no IAF pelo nome do indicador.
 
 ### Ação para Itens por Boleto
-3 ações práticas. Inclua BT, BP ou Desafios quando relevante.
+2 ações para chegar em {_fmt_num(dados.get('ib_nec'))} I/B. Inclua BT e BP se pertinente.
 
 ### Ação para Preço Médio
-3 ações práticas. Foco em mix, categorias e disciplina de desconto.
+2 ações para atingir {_fmt_moeda(dados.get('pm_nec'))} de PM. Foco em mix e disciplina de desconto.
 
 ### Ação para Boletos
-3 ações para aumentar fluxo e captação. Inclua CRM e Loja Digital.
+2 ações para alcançar {_fmt_num(dados.get('bol_nec'),0)} boletos. CRM, Loja Digital, Ação de Fluxo.
 
 ### O que monitorar
-3 KPIs com frequência (ex: "BM diário por consultora").
+3 KPIs diários/semanais com frequência definida.
 
-### Impacto IAF
-Quais indicadores IAF (pelo nome) serão mais beneficiados e quantos pontos estão em jogo.
-
-Seja OBJETIVO. Máximo 250 palavras no total."""
+Máximo 180 palavras no total. Sem introdução. Sem conclusão. Direto ao ponto."""
 
     client = _get_client()
     response = client.chat.completions.create(
@@ -155,8 +169,8 @@ Seja OBJETIVO. Máximo 250 palavras no total."""
             {"role": "system", "content": _system_prompt(dados)},
             {"role": "user",   "content": prompt_usuario},
         ],
-        temperature=0.3,
-        max_tokens=900,
+        temperature=0.25,
+        max_tokens=700,
     )
     return response.choices[0].message.content.strip()
 
@@ -177,10 +191,16 @@ def chat_estrategico(historico: list, mensagem_gestor: str, dados: dict) -> str:
     messages.extend(historico)
     messages.append({"role": "user", "content": mensagem_gestor})
 
+    # Injeta lembrete de brevidade na última mensagem do usuário
+    messages[-1]["content"] = (
+        messages[-1]["content"]
+        + "\n\n(Responda em no máximo 120 palavras. Seja direto e estratégico.)"
+    )
+
     response = client.chat.completions.create(
         model="llama-3.3-70b-versatile",
         messages=messages,
         temperature=0.4,
-        max_tokens=500,
+        max_tokens=350,
     )
     return response.choices[0].message.content.strip()

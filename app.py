@@ -507,19 +507,19 @@ elif tipo == "info":
 else:
     st.warning(mensagem)
 
-# ── Seção IA: Plano + Chat estratégico ───────────────────────────────────────
+# ── Seção IA: Plano personalizado + Chat estratégico ─────────────────────────
 
 st.markdown("---")
-st.markdown("##### ✨ Assistente de Plano de Ação — IA Estratégica")
-st.caption("Groq · LLaMA 3.3 70B · IAF 2026 | Gratuito")
+st.markdown("##### ✨ Plano de Ação com IA")
+st.caption("Groq · LLaMA 3.3 70B · IAF 2026 — personalizado para esta loja")
 
 # Limpa histórico ao trocar loja ou mês
 llm_chave_atual = f"{bcps_selecionado}_{mes_selecionado}"
 if st.session_state.get("llm_chave") != llm_chave_atual:
     st.session_state["llm_plano"] = None
     st.session_state["llm_chat"]  = []
+    st.session_state["llm_dados"] = {}
 
-# Monta dados da loja (reutilizado no chat)
 def _montar_dados_llm():
     loja_info_llm = dcentros[dcentros['BCPS'] == int(bcps_selecionado)]
     li_llm = loja_info_llm.iloc[0] if not loja_info_llm.empty else {}
@@ -529,16 +529,19 @@ def _montar_dados_llm():
         "mes_nome":  NOMES_MESES.get(mes_selecionado, str(mes_selecionado)),
         "regional":  li_llm.get("GRVO", "—") if hasattr(li_llm, "get") else "—",
         "praca":     li_llm.get("PRACA", "—") if hasattr(li_llm, "get") else "—",
-        "meta":      meta,  "bol_proj": bol_proj,
-        "bm_nec":    bm_nec, "ib_nec": ib_nec, "pm_nec": pm_nec, "bol_nec": bol_nec,
-        "bm_ref":    bm_ref, "ib_ref": ib_ref, "pm_ref": pm_ref, "bol_ref": bol_ref,
-        "max_bm":    max_bm, "max_ib": max_ib, "max_pm": max_pm, "max_bol": max_bol,
+        "meta":      meta,       "bol_proj": bol_proj,
+        "bm_nec":    bm_nec,     "ib_nec":   ib_nec,
+        "pm_nec":    pm_nec,     "bol_nec":  bol_nec,
+        "bm_ref":    bm_ref,     "ib_ref":   ib_ref,
+        "pm_ref":    pm_ref,     "bol_ref":  bol_ref,
+        "max_bm":    max_bm,     "max_ib":   max_ib,
+        "max_pm":    max_pm,     "max_bol":  max_bol,
         "var_bm":    _safe(row.get("VAR_BM")), "var_ib": _safe(row.get("VAR_IB")),
         "var_pm":    _safe(row.get("VAR_PM")), "var_bol": _safe(row.get("VAR_BOL")),
         "foco":      st.session_state.get("llm_foco", "combinado"),
     }
 
-# Foco + botão gerar plano
+# ── Foco + botão ──────────────────────────────────────────────────────────────
 foco_opcoes = {
     "combinado": "🎯 Plano combinado",
     "bm":        "📊 Foco em Boleto Médio",
@@ -556,34 +559,34 @@ with col_btn_ia:
 
 if gerar_llm:
     dados_llm = _montar_dados_llm()
-    with st.spinner("Gerando plano..."):
+    with st.spinner("Gerando plano personalizado..."):
         try:
             plano = gerar_plano_inicial(dados_llm)
             st.session_state["llm_plano"] = plano
             st.session_state["llm_chave"] = llm_chave_atual
             st.session_state["llm_dados"] = dados_llm
-            # Plano vira primeira mensagem do chat (assistente)
-            st.session_state["llm_chat"] = [{"role": "assistant", "content": plano}]
+            st.session_state["llm_chat"]  = [{"role": "assistant", "content": plano}]
         except ValueError as e:
             st.error(f"⚠️ {e}")
         except Exception as e:
             st.error(f"❌ Erro ao chamar a IA: {e}")
 
-# ── Exibe o histórico do chat ─────────────────────────────────────────────────
-if st.session_state.get("llm_chat"):
-    st.markdown("")
-    for msg in st.session_state["llm_chat"]:
-        with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
-            st.markdown(msg["content"])
+# ── Exibe o plano gerado (compacto, sem chat) ─────────────────────────────────
+if st.session_state.get("llm_plano"):
+    with st.container(border=True):
+        st.markdown(st.session_state["llm_plano"])
 
-    # ── Botão: usar plano nos campos ─────────────────────────────────────────
-    if st.session_state.get("llm_plano"):
-        if st.button("📋 Preencher campos do Plano de Ação com este plano", key="usar_plano_llm"):
+    col_usar, _ = st.columns([2, 3])
+    with col_usar:
+        if st.button("📋 Usar este plano no Plano de Ação abaixo", key="usar_plano_llm"):
             import re
             plano_txt = st.session_state["llm_plano"]
 
             def _extrair(texto, titulo):
-                m = re.search(rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)", texto, re.DOTALL | re.IGNORECASE)
+                m = re.search(
+                    rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)",
+                    texto, re.DOTALL | re.IGNORECASE
+                )
                 return m.group(1).strip() if m else ""
 
             bm_ia  = _extrair(plano_txt, "Ação para Boleto Médio")
@@ -599,31 +602,44 @@ if st.session_state.get("llm_chat"):
             st.success("Campos preenchidos! Revise e ajuste antes de salvar.")
             st.rerun()
 
-    # ── Chat input ────────────────────────────────────────────────────────────
-    st.markdown("")
-    st.caption("💬 Discuta o plano — diga o que não é viável ou peça alternativas estratégicas")
-    msg_gestor = st.chat_input("Ex: minha loja não tem estrutura para serviços, o que mais posso fazer?")
+    # ── Chat estratégico ──────────────────────────────────────────────────────
+    st.markdown("---")
+    st.markdown("##### 💬 Discuta sobre seu plano de ação com a IA")
+    st.caption("Diga o que não é viável — a IA sugere alternativas baseadas no IAF e no contexto da sua loja.")
+
+    # Janela de chat rolável (mostra apenas mensagens da conversa, exceto o plano inicial)
+    mensagens_chat = st.session_state["llm_chat"][1:]  # pula o plano inicial
+    if mensagens_chat:
+        with st.container(height=320, border=True):
+            for msg in mensagens_chat:
+                with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
+                    st.markdown(msg["content"])
+    else:
+        st.caption("_Nenhuma mensagem ainda. Use o campo abaixo para começar._")
+
+    # Input do chat
+    msg_gestor = st.chat_input(
+        "Ex: minha loja não tem estrutura para serviços, o que fazer?",
+        key="chat_input_ia",
+    )
 
     if msg_gestor:
-        # Adiciona mensagem do gestor ao histórico
         st.session_state["llm_chat"].append({"role": "user", "content": msg_gestor})
 
-        # Garante que os dados da loja estejam salvos
         if not st.session_state.get("llm_dados"):
             st.session_state["llm_dados"] = _montar_dados_llm()
 
         with st.spinner("Pensando..."):
             try:
                 resposta = chat_estrategico(
-                    historico=st.session_state["llm_chat"][:-1],  # sem a última (já adicionada)
+                    historico=st.session_state["llm_chat"][:-1],
                     mensagem_gestor=msg_gestor,
                     dados=st.session_state["llm_dados"],
                 )
                 st.session_state["llm_chat"].append({"role": "assistant", "content": resposta})
             except Exception as e:
                 st.session_state["llm_chat"].append({
-                    "role": "assistant",
-                    "content": f"❌ Erro: {e}"
+                    "role": "assistant", "content": f"❌ Erro: {e}"
                 })
         st.rerun()
 
