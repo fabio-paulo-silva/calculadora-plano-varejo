@@ -3,7 +3,7 @@ import datetime
 import pandas as pd
 import streamlit as st
 
-from llm_sugestao import gerar_sugestao_llm
+from llm_sugestao import chat_estrategico, gerar_plano_inicial
 from plano_acao import carregar_historico, gerar_pdf, salvar_historico
 from transform_data import carregar_tudo
 
@@ -222,9 +222,13 @@ if "pdf_nome" not in st.session_state:
 if "pdf_chave" not in st.session_state:
     st.session_state["pdf_chave"] = None   # identifica loja+mês do PDF gerado
 if "llm_plano" not in st.session_state:
-    st.session_state["llm_plano"] = None   # texto do plano gerado pelo LLM
+    st.session_state["llm_plano"] = None
 if "llm_chave" not in st.session_state:
-    st.session_state["llm_chave"] = None   # invalida ao trocar loja/mês
+    st.session_state["llm_chave"] = None
+if "llm_chat" not in st.session_state:
+    st.session_state["llm_chat"] = []      # histórico do chat [{role, content}]
+if "llm_dados" not in st.session_state:
+    st.session_state["llm_dados"] = {}     # dados da loja usados no chat
 
 try:
     analise, hist_max, metas, base, dcentros = load_data()
@@ -503,120 +507,124 @@ elif tipo == "info":
 else:
     st.warning(mensagem)
 
-# ── Botão de geração de plano com IA ─────────────────────────────────────────
+# ── Seção IA: Plano + Chat estratégico ───────────────────────────────────────
 
 st.markdown("---")
-st.markdown("##### ✨ Plano de Ação com Inteligência Artificial")
-st.caption(
-    "Gera um plano detalhado baseado nos seus dados reais + base de conhecimento IAF 2026 "
-    "(Groq · LLaMA 3.3 70B). Gratuito."
-)
+st.markdown("##### ✨ Assistente de Plano de Ação — IA Estratégica")
+st.caption("Groq · LLaMA 3.3 70B · IAF 2026 | Gratuito")
 
-# Limpa plano LLM ao trocar loja ou mês
+# Limpa histórico ao trocar loja ou mês
 llm_chave_atual = f"{bcps_selecionado}_{mes_selecionado}"
 if st.session_state.get("llm_chave") != llm_chave_atual:
     st.session_state["llm_plano"] = None
+    st.session_state["llm_chat"]  = []
 
-# Opção de foco
-foco_opcoes = {
-    "combinado":  "🎯 Plano combinado (todas as alavancas)",
-    "bm":         "📊 Foco em Boleto Médio",
-    "ib":         "📦 Foco em Itens por Boleto",
-    "pm":         "💰 Foco em Preço Médio",
-    "boletos":    "🚀 Foco em Boletos (fluxo de clientes)",
-}
-foco_sel = st.selectbox(
-    "Foco do plano",
-    options=list(foco_opcoes.keys()),
-    format_func=lambda k: foco_opcoes[k],
-    key="llm_foco",
-)
-
-col_llm1, col_llm2 = st.columns([1, 3])
-with col_llm1:
-    gerar_llm = st.button("✨ Gerar Plano com IA", use_container_width=True, type="primary")
-
-if gerar_llm:
+# Monta dados da loja (reutilizado no chat)
+def _montar_dados_llm():
     loja_info_llm = dcentros[dcentros['BCPS'] == int(bcps_selecionado)]
     li_llm = loja_info_llm.iloc[0] if not loja_info_llm.empty else {}
-
-    dados_llm = {
+    return {
         "loja_nome": loja_map.get(int(bcps_selecionado), f"Loja {int(bcps_selecionado)}"),
         "bcps":      int(bcps_selecionado),
         "mes_nome":  NOMES_MESES.get(mes_selecionado, str(mes_selecionado)),
         "regional":  li_llm.get("GRVO", "—") if hasattr(li_llm, "get") else "—",
         "praca":     li_llm.get("PRACA", "—") if hasattr(li_llm, "get") else "—",
-        # Metas e projeções
-        "meta":      meta,
-        "bol_proj":  bol_proj,
-        # Necessários
-        "bm_nec":    bm_nec,
-        "ib_nec":    ib_nec,
-        "pm_nec":    pm_nec,
-        "bol_nec":   bol_nec,
-        # Referência 2025
-        "bm_ref":    bm_ref,
-        "ib_ref":    ib_ref,
-        "pm_ref":    pm_ref,
-        "bol_ref":   bol_ref,
-        # Máximos históricos
-        "max_bm":    max_bm,
-        "max_ib":    max_ib,
-        "max_pm":    max_pm,
-        "max_bol":   max_bol,
-        # Variações necessárias
-        "var_bm":    _safe(row.get("VAR_BM")),
-        "var_ib":    _safe(row.get("VAR_IB")),
-        "var_pm":    _safe(row.get("VAR_PM")),
-        "var_bol":   _safe(row.get("VAR_BOL")),
-        # Diagnóstico determinístico como base
-        "sugestao_deterministica": mensagem,
-        "foco": foco_sel,
+        "meta":      meta,  "bol_proj": bol_proj,
+        "bm_nec":    bm_nec, "ib_nec": ib_nec, "pm_nec": pm_nec, "bol_nec": bol_nec,
+        "bm_ref":    bm_ref, "ib_ref": ib_ref, "pm_ref": pm_ref, "bol_ref": bol_ref,
+        "max_bm":    max_bm, "max_ib": max_ib, "max_pm": max_pm, "max_bol": max_bol,
+        "var_bm":    _safe(row.get("VAR_BM")), "var_ib": _safe(row.get("VAR_IB")),
+        "var_pm":    _safe(row.get("VAR_PM")), "var_bol": _safe(row.get("VAR_BOL")),
+        "foco":      st.session_state.get("llm_foco", "combinado"),
     }
 
-    with st.spinner("Gerando plano de ação com IA... (alguns segundos)"):
+# Foco + botão gerar plano
+foco_opcoes = {
+    "combinado": "🎯 Plano combinado",
+    "bm":        "📊 Foco em Boleto Médio",
+    "ib":        "📦 Foco em Itens por Boleto",
+    "pm":        "💰 Foco em Preço Médio",
+    "boletos":   "🚀 Foco em Boletos",
+}
+col_foco, col_btn_ia = st.columns([2, 1])
+with col_foco:
+    st.selectbox("Foco do plano", options=list(foco_opcoes.keys()),
+                 format_func=lambda k: foco_opcoes[k], key="llm_foco")
+with col_btn_ia:
+    st.write("")
+    gerar_llm = st.button("✨ Gerar Plano", use_container_width=True, type="primary")
+
+if gerar_llm:
+    dados_llm = _montar_dados_llm()
+    with st.spinner("Gerando plano..."):
         try:
-            plano_gerado = gerar_sugestao_llm(dados_llm)
-            st.session_state["llm_plano"] = plano_gerado
+            plano = gerar_plano_inicial(dados_llm)
+            st.session_state["llm_plano"] = plano
             st.session_state["llm_chave"] = llm_chave_atual
+            st.session_state["llm_dados"] = dados_llm
+            # Plano vira primeira mensagem do chat (assistente)
+            st.session_state["llm_chat"] = [{"role": "assistant", "content": plano}]
         except ValueError as e:
-            st.error(f"⚠️ Chave de API não configurada: {e}")
-        except ImportError as e:
             st.error(f"⚠️ {e}")
         except Exception as e:
             st.error(f"❌ Erro ao chamar a IA: {e}")
 
-# Exibe o plano gerado (persiste entre reruns)
-if st.session_state.get("llm_plano"):
-    with st.container(border=True):
-        st.markdown(st.session_state["llm_plano"])
+# ── Exibe o histórico do chat ─────────────────────────────────────────────────
+if st.session_state.get("llm_chat"):
+    st.markdown("")
+    for msg in st.session_state["llm_chat"]:
+        with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
+            st.markdown(msg["content"])
 
-    # Botão para pré-preencher os campos do Plano de Ação
-    if st.button("📋 Usar este plano nos campos abaixo", key="usar_plano_llm"):
-        plano_txt = st.session_state["llm_plano"]
-
-        def _extrair_secao(texto: str, titulo: str) -> str:
-            """Extrai o conteúdo de uma seção markdown pelo título."""
+    # ── Botão: usar plano nos campos ─────────────────────────────────────────
+    if st.session_state.get("llm_plano"):
+        if st.button("📋 Preencher campos do Plano de Ação com este plano", key="usar_plano_llm"):
             import re
-            pattern = rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)"
-            m = re.search(pattern, texto, re.DOTALL | re.IGNORECASE)
-            return m.group(1).strip() if m else ""
+            plano_txt = st.session_state["llm_plano"]
 
-        bm_ia  = _extrair_secao(plano_txt, "Ação para Boleto Médio (BM)")
-        ib_ia  = _extrair_secao(plano_txt, "Ação para Itens por Boleto (I/B)")
-        pm_ia  = _extrair_secao(plano_txt, "Ação para Preço Médio (PM)")
-        bol_ia = _extrair_secao(plano_txt, "Ação para Boletos (captação de clientes)")
+            def _extrair(texto, titulo):
+                m = re.search(rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)", texto, re.DOTALL | re.IGNORECASE)
+                return m.group(1).strip() if m else ""
 
-        if bm_ia:
-            st.session_state["acao_bm"]      = bm_ia
-        if ib_ia:
-            st.session_state["acao_ib"]      = ib_ia
-        if pm_ia:
-            st.session_state["acao_pm"]      = pm_ia
-        if bol_ia:
-            st.session_state["acao_boletos"] = bol_ia
+            bm_ia  = _extrair(plano_txt, "Ação para Boleto Médio")
+            ib_ia  = _extrair(plano_txt, "Ação para Itens por Boleto")
+            pm_ia  = _extrair(plano_txt, "Ação para Preço Médio")
+            bol_ia = _extrair(plano_txt, "Ação para Boletos")
 
-        st.success("Campos do Plano de Ação preenchidos com o plano da IA! Revise e ajuste antes de salvar.")
+            if bm_ia:  st.session_state["acao_bm"]      = bm_ia
+            if ib_ia:  st.session_state["acao_ib"]      = ib_ia
+            if pm_ia:  st.session_state["acao_pm"]      = pm_ia
+            if bol_ia: st.session_state["acao_boletos"] = bol_ia
+
+            st.success("Campos preenchidos! Revise e ajuste antes de salvar.")
+            st.rerun()
+
+    # ── Chat input ────────────────────────────────────────────────────────────
+    st.markdown("")
+    st.caption("💬 Discuta o plano — diga o que não é viável ou peça alternativas estratégicas")
+    msg_gestor = st.chat_input("Ex: minha loja não tem estrutura para serviços, o que mais posso fazer?")
+
+    if msg_gestor:
+        # Adiciona mensagem do gestor ao histórico
+        st.session_state["llm_chat"].append({"role": "user", "content": msg_gestor})
+
+        # Garante que os dados da loja estejam salvos
+        if not st.session_state.get("llm_dados"):
+            st.session_state["llm_dados"] = _montar_dados_llm()
+
+        with st.spinner("Pensando..."):
+            try:
+                resposta = chat_estrategico(
+                    historico=st.session_state["llm_chat"][:-1],  # sem a última (já adicionada)
+                    mensagem_gestor=msg_gestor,
+                    dados=st.session_state["llm_dados"],
+                )
+                st.session_state["llm_chat"].append({"role": "assistant", "content": resposta})
+            except Exception as e:
+                st.session_state["llm_chat"].append({
+                    "role": "assistant",
+                    "content": f"❌ Erro: {e}"
+                })
         st.rerun()
 
 # Tabela comparativa com máximos históricos
