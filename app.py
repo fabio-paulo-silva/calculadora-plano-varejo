@@ -528,24 +528,11 @@ else:
     _meta_vals = [_safe(r.get('META')) for r in _tend_rows]
 
     _tend_df = pd.DataFrame({
-        "Mês": _meses_nomes,
-        "Faturamento": [formatar_moeda(v) for v in _fat_vals],
-        "vs Meta": [
-            f"{(_fat_vals[i]/_meta_vals[i]*100):.0f}%" if _fat_vals[i] and _meta_vals[i] else "—"
-            for i in range(len(_tend_rows))
-        ],
-        "BM": [
-            f"{formatar_moeda(_bm_vals[i])}{_seta(_bm_vals, i)}" for i in range(len(_tend_rows))
-        ],
-        "I/B": [
-            f"{formatar_numero(_ib_vals[i])}{_seta(_ib_vals, i)}" for i in range(len(_tend_rows))
-        ],
-        "PM": [
-            f"{formatar_moeda(_pm_vals[i])}{_seta(_pm_vals, i)}" for i in range(len(_tend_rows))
-        ],
-        "Boletos": [
-            f"{formatar_numero(_bol_vals[i], 0)}{_seta(_bol_vals, i)}" for i in range(len(_tend_rows))
-        ],
+        "Mês":     _meses_nomes,
+        "BM":      [f"{formatar_moeda(_bm_vals[i])}{_seta(_bm_vals, i)}"   for i in range(len(_tend_rows))],
+        "I/B":     [f"{formatar_numero(_ib_vals[i])}{_seta(_ib_vals, i)}"  for i in range(len(_tend_rows))],
+        "PM":      [f"{formatar_moeda(_pm_vals[i])}{_seta(_pm_vals, i)}"   for i in range(len(_tend_rows))],
+        "Boletos": [f"{formatar_numero(_bol_vals[i], 0)}{_seta(_bol_vals, i)}" for i in range(len(_tend_rows))],
     })
     st.dataframe(_tend_df, use_container_width=True, hide_index=True)
 

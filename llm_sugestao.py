@@ -159,89 +159,135 @@ def _system_prompt(dados: dict) -> str:
 
 def interpretar_tendencia(tendencia: list) -> list:
     """
-    Recebe a lista de meses da loja e retorna frases de diagnóstico prontas.
-    Usado tanto na UI (visível ao gestor) quanto no prompt do LLM.
+    Gera conclusões diagnósticas em linguagem direta (tom: "Seu I/B caiu 3 meses seguidos").
+    Foca em BM, I/B e PM. Boletos usado só para cruzamentos.
     """
-    conclusoes = []
     if len(tendencia) < 2:
-        return conclusoes
+        return []
 
-    tendencias_ind = {}
-    for ind, chave in [("BM", "BM"), ("I/B", "I/B"), ("PM", "PM"), ("Boletos", "BOLETOS")]:
+    def _analisar(chave):
         vals = [m.get(chave) for m in tendencia if m.get(chave) is not None]
-        meses = [NOMES_MESES.get(m.get('MES', 0), '')[:3] for m in tendencia if m.get(chave) is not None]
         if len(vals) < 2:
-            continue
-        delta = vals[-1] - vals[0]
-        pct   = delta / vals[0] if vals[0] else 0
-        # Conta meses consecutivos na mesma direção
+            return None
+        # Conta meses consecutivos na mesma direção partindo do mais recente
         consec = 1
         for i in range(len(vals) - 1, 0, -1):
-            if (vals[i] >= vals[i-1]) == (delta >= 0):
-                consec += 1
-            else:
-                break
-        tendencias_ind[ind] = {
-            "vals": vals, "meses": meses,
-            "pct": pct, "dir": "subindo" if delta > 0 else "caindo", "consec": consec
+            if vals[i] < vals[i - 1]:   # caindo
+                if vals[-1] < vals[-2]:
+                    consec += 1
+                else:
+                    break
+            else:                        # subindo
+                if vals[-1] >= vals[-2]:
+                    consec += 1
+                else:
+                    break
+        delta = vals[-1] - vals[0]
+        return {
+            "vals":  vals,
+            "dir":   "subindo" if delta >= 0 else "caindo",
+            "consec": consec,
+            "pct":   delta / vals[0] if vals[0] else 0,
+            "primeiro": vals[0],
+            "ultimo":   vals[-1],
         }
 
-    bm  = tendencias_ind.get("BM", {})
-    ib  = tendencias_ind.get("I/B", {})
-    pm  = tendencias_ind.get("PM", {})
-    bol = tendencias_ind.get("Boletos", {})
+    bm  = _analisar("BM")
+    ib  = _analisar("I/B")
+    pm  = _analisar("PM")
+    bol = _analisar("BOLETOS")
 
-    fmt_bm  = lambda v: _fmt_moeda(v)
-    fmt_ib  = lambda v: _fmt_num(v, 1)
-    fmt_bol = lambda v: _fmt_num(v, 0)
+    conclusoes = []
+    ja_citou_ib = False
 
-    # Padrão 1: I/B caindo consecutivamente → problema de processo
-    if ib.get("dir") == "caindo" and ib.get("consec", 0) >= 2:
-        v = ib["vals"]
+    # ── Padrões cruzados (prioridade) ─────────────────────────────────────────
+
+    # BM crescendo mas boletos caindo → fluxo é o gap
+    if bm and bol and bm["dir"] == "subindo" and bol["dir"] == "caindo":
+        n_bm  = bm["consec"]
+        n_bol = bol["consec"]
         conclusoes.append(
-            f"⚠️ I/B caindo há {ib['consec']} meses seguidos "
-            f"({fmt_ib(v[0])} → {fmt_ib(v[-1])}, {_fmt_pct(ib['pct'])}): "
-            f"problema de processo — equipe não está executando venda sugestiva e BT/BP."
+            f"Você cresceu o BM por {n_bm} {'mês' if n_bm == 1 else 'meses'} seguidos "
+            f"({_fmt_moeda(bm['primeiro'])} → {_fmt_moeda(bm['ultimo'])}) "
+            f"mas perdeu boletos por {n_bol} {'mês' if n_bol == 1 else 'meses'} — "
+            f"o fluxo é o gap real."
         )
 
-    # Padrão 2: BM subindo mas Boletos caindo → fluxo é o gap
-    if bm.get("dir") == "subindo" and bol.get("dir") == "caindo":
+    # I/B e PM caindo → equipe não está vendendo bem
+    if ib and pm and ib["dir"] == "caindo" and pm["dir"] == "caindo":
+        n_ib = ib["consec"]
+        n_pm = pm["consec"]
         conclusoes.append(
-            f"⚠️ BM crescendo ({_fmt_pct(bm['pct'])}) mas Boletos caindo ({_fmt_pct(bol['pct'])}): "
-            f"a equipe vende bem para quem entra, mas o fluxo está diminuindo. "
-            f"Foco em CRM, Loja Digital e conversão da Ação de Fluxo."
+            f"Seu I/B caiu {n_ib} {'mês' if n_ib == 1 else 'meses'} seguidos "
+            f"({_fmt_num(ib['primeiro'], 1)} → {_fmt_num(ib['ultimo'], 1)}) "
+            f"e seu PM caiu {n_pm} {'mês' if n_pm == 1 else 'meses'} "
+            f"({_fmt_moeda(pm['primeiro'])} → {_fmt_moeda(pm['ultimo'])}) — "
+            f"o problema não é meta, é execução: mix e venda sugestiva."
+        )
+        ja_citou_ib = True
+
+    # ── Padrões por indicador ──────────────────────────────────────────────────
+
+    # I/B caindo (se ainda não citado)
+    if ib and ib["dir"] == "caindo" and ib["consec"] >= 2 and not ja_citou_ib:
+        n = ib["consec"]
+        conclusoes.append(
+            f"Seu I/B caiu {n} meses seguidos "
+            f"({_fmt_num(ib['primeiro'], 1)} → {_fmt_num(ib['ultimo'], 1)}) — "
+            f"o problema não é meta, é processo: equipe não está executando BT/BP e venda sugestiva."
         )
 
-    # Padrão 3: BM e PM caindo → mix migrando para itens baratos
-    if bm.get("dir") == "caindo" and pm.get("dir") == "caindo":
+    # BM caindo
+    if bm and bm["dir"] == "caindo" and bm["consec"] >= 2:
+        n = bm["consec"]
         conclusoes.append(
-            f"⚠️ BM e PM caindo juntos ({_fmt_pct(bm['pct'])} e {_fmt_pct(pm['pct'])}): "
-            f"mix migrando para produtos de menor valor — revisar disciplina de desconto e categorias premium."
+            f"Seu BM caiu {n} meses seguidos "
+            f"({_fmt_moeda(bm['primeiro'])} → {_fmt_moeda(bm['ultimo'])}) — "
+            f"mix de produtos perdendo valor ou desconto sendo mal aplicado."
         )
 
-    # Padrão 4: Boletos E I/B caindo → queda dupla
-    if bol.get("dir") == "caindo" and ib.get("dir") == "caindo" and not any("I/B caindo" in c for c in conclusoes):
+    # PM caindo sozinho
+    if pm and pm["dir"] == "caindo" and pm["consec"] >= 2 and not any("PM caiu" in c for c in conclusoes):
+        n = pm["consec"]
         conclusoes.append(
-            f"🔴 Boletos e I/B caindo juntos: menos clientes E menos produtividade por atendimento. "
-            f"Ação urgente em fluxo e em execução de BT/BP."
+            f"Seu Preço Médio caiu {n} meses seguidos "
+            f"({_fmt_moeda(pm['primeiro'])} → {_fmt_moeda(pm['ultimo'])}) — "
+            f"categorias de menor valor ganhando espaço no mix."
         )
 
-    # Padrão 5: tudo subindo
-    if all(d.get("dir") == "subindo" for d in [bm, ib, pm, bol] if d):
+    # BM subindo consistente
+    if bm and bm["dir"] == "subindo" and bm["consec"] >= 3 and not any("cresceu o BM" in c for c in conclusoes):
+        n = bm["consec"]
         conclusoes.append(
-            f"✅ Loja em crescimento consistente em todos os indicadores — manter ritmo e não perder o que está funcionando."
+            f"Você cresceu o BM por {n} meses consecutivos "
+            f"({_fmt_moeda(bm['primeiro'])} → {_fmt_moeda(bm['ultimo'])}) — "
+            f"ritmo positivo, manter execução de BT/BP e mix premium."
         )
 
-    # Sem padrão claro: lista os que variam mais de 5%
+    # I/B subindo
+    if ib and ib["dir"] == "subindo" and ib["consec"] >= 3:
+        n = ib["consec"]
+        conclusoes.append(
+            f"Seu I/B cresceu {n} meses seguidos "
+            f"({_fmt_num(ib['primeiro'], 1)} → {_fmt_num(ib['ultimo'], 1)}) — "
+            f"equipe executando bem a venda sugestiva."
+        )
+
+    # Sem padrão relevante
     if not conclusoes:
-        for ind, d in tendencias_ind.items():
-            if abs(d["pct"]) >= 0.05:
-                v = d["vals"]
-                fmt = fmt_bm if ind in ("BM", "PM") else (fmt_bol if ind == "Boletos" else fmt_ib)
-                conclusoes.append(
-                    f"{'↑' if d['dir'] == 'subindo' else '↓'} {ind} {d['dir']} "
-                    f"{_fmt_pct(d['pct'])} ({fmt(v[0])} → {fmt(v[-1])})."
+        partes = []
+        for nome, d, fmt in [
+            ("BM",  bm,  _fmt_moeda),
+            ("I/B", ib,  lambda v: _fmt_num(v, 1)),
+            ("PM",  pm,  _fmt_moeda),
+        ]:
+            if d and abs(d["pct"]) >= 0.03:
+                partes.append(
+                    f"{nome} {'subindo' if d['dir'] == 'subindo' else 'caindo'} "
+                    f"{_fmt_pct(d['pct'])} ({fmt(d['primeiro'])} → {fmt(d['ultimo'])})"
                 )
+        if partes:
+            conclusoes.append("Variações recentes: " + " | ".join(partes) + ".")
 
     return conclusoes
 
