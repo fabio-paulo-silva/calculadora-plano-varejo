@@ -138,9 +138,10 @@ def _system_prompt(dados: dict) -> str:
 ## REGRAS INEGOCIÁVEIS
 - Respostas CURTAS e DIRETAS — máximo 5 bullets por seção, sem enrolação
 - Nunca use numeração de indicadores (diga "Resgate Fidelidade", nunca "indicador 1.6")
-- USE os dados reais de tendência e benchmark para personalizar cada sugestão — nada genérico
+- USE os dados reais de tendência e comparação para personalizar cada sugestão — nada genérico
+- **NUNCA use termos estatísticos** como mediana, percentil, top 25%, benchmark, p50, p75. Use linguagem simples: "a maioria das lojas do mesmo tipo", "as melhores lojas", "abaixo do esperado para este formato"
 - Foco exclusivo no canal LOJA (PDV físico) — jamais mencione VD, revendedoras ou Eudora
-- Português brasileiro, tom de gestor experiente em varejo
+- Português brasileiro, tom de gestor experiente em varejo — linguagem direta e humana
 - **NUNCA sugira "implementar Ação de Fluxo"** — ela já existe e já traz clientes. Foque sempre em CONVERTER os clientes que já vieram retirar o brinde: abordagem no momento do resgate, BT/BP no balcão, script do consultor
 
 ## CONTEXTO IAF 2026 — CANAL LOJA
@@ -224,7 +225,7 @@ def gerar_plano_inicial(dados: dict) -> str:
     b = dados.get('benchmark', {})
     cluster_nome = b.get('cluster_nome', 'Geral')
     n_lojas      = b.get('n_lojas', 0)
-    insight_bench = "Benchmark não disponível."
+    insight_bench = "Comparação não disponível."
     if n_lojas > 0:
         linhas_bench = []
         for ind, chave_loja, chave_p50, chave_p75 in [
@@ -237,15 +238,20 @@ def gerar_plano_inicial(dados: dict) -> str:
                 val  = float(dados.get(chave_loja))
                 p50  = float(b.get(chave_p50))
                 p75  = float(b.get(chave_p75))
-                pos  = "🟢 Top 25%" if val >= p75 else ("🟡 Acima da mediana" if val >= p50 else "🔴 Abaixo da mediana")
-                fmt  = _fmt_moeda if ind in ("BM", "PM") else lambda v, _=0: _fmt_num(v, 0 if ind == "Boletos" else 1)
-                linhas_bench.append(
-                    f"- **{ind}:** esta loja {fmt(val)} | mediana {fmt(p50)} | top25% {fmt(p75)} → {pos}"
-                )
+                fmt  = _fmt_moeda if ind in ("BM", "PM") else (lambda v: _fmt_num(v, 0)) if ind == "Boletos" else _fmt_num
+                # Linguagem simples — sem termos estatísticos
+                if val >= p75:
+                    pos = f"entre as melhores lojas {cluster_nome} ({fmt(val)} vs {fmt(p75)} das top)"
+                elif val >= p50:
+                    pos = f"acima da maioria das lojas {cluster_nome} ({fmt(val)} vs {fmt(p50)} da maioria)"
+                else:
+                    pct_gap = (p50 - val) / p50 * 100
+                    pos = f"abaixo da maioria das lojas {cluster_nome} — gap de {pct_gap:.0f}% para alcançar a maioria ({fmt(val)} vs {fmt(p50)})"
+                linhas_bench.append(f"- **{ind}:** {pos}")
             except Exception:
                 pass
         if linhas_bench:
-            insight_bench = f"Cluster **{cluster_nome}** ({n_lojas} lojas):\n" + "\n".join(linhas_bench)
+            insight_bench = f"Comparado com {n_lojas} lojas do tipo {cluster_nome}:\n" + "\n".join(linhas_bench)
 
     # ── Contexto da equipe e desafio ──────────────────────────────────────────
     equipe   = dados.get('tamanho_equipe', '?')
@@ -299,7 +305,10 @@ Com base EXCLUSIVAMENTE nos dados acima, gere um plano focado em **{foco}**.
 Use EXATAMENTE estes títulos markdown:
 
 ### Diagnóstico
-1 frase: gargalo real com número da tendência + posição no benchmark.
+2 frases em linguagem simples, como um consultor falaria para o gestor:
+- Frase 1: o que está acontecendo com esta loja (use os números reais da tendência, ex: "Seu I/B caiu de 2,4 para 2,1 nos últimos 3 meses")
+- Frase 2: onde está o gap em relação às outras lojas do mesmo tipo (use linguagem simples, ex: "Lojas de Shopping parecidas com a sua vendem em média X a mais por boleto")
+PROIBIDO: mediana, percentil, benchmark, p50, top 25% — use só linguagem de gestão do dia a dia
 
 ### Ação para Boleto Médio
 2 ações para atingir {_fmt_moeda(dados.get('bm_nec'))} — calibradas para {equipe} consultores e cluster {tipo_loja}. Cite o indicador IAF impactado pelo nome.
