@@ -529,7 +529,8 @@ _snap = {
     "tipo_loja": str(_loja_dc.iloc[0].get("CLUSTER", "Não informado")).strip()
                  if not _loja_dc.empty else "Não informado",
     # Contexto calculado
-    "tendencia": tendencia_loja(analise, int(bcps_selecionado), mes_selecionado),
+    "tendencia": tendencia_loja(analise, int(bcps_selecionado), mes_selecionado,
+                                canal=canal_selecionado if canal_selecionado != "Todos" else "LOJA"),
     "benchmark": benchmark_cluster(analise, mes_selecionado, dcentros, int(bcps_selecionado)),
 }
 st.session_state["_snap"] = _snap   # disponível dentro do fragment

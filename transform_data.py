@@ -219,18 +219,31 @@ def preparar_dcentros(dcentros: pd.DataFrame) -> pd.DataFrame:
     return df.dropna(subset=['BCPS']).drop_duplicates(subset=['BCPS'])
 
 
-def tendencia_loja(analise: pd.DataFrame, bcps: int, mes_atual: int, n_meses: int = 3) -> list:
+def tendencia_loja(
+    analise: pd.DataFrame,
+    bcps: int,
+    mes_atual: int,
+    canal: str = "LOJA",
+    n_meses: int = 4,
+) -> list:
     """
-    Retorna os últimos n_meses com dados reais 2026 anteriores ao mês atual.
-    Cada item: dict com MES, BM, I/B, PM, BOLETOS, META, FATURAMENTO e refs 2025.
+    Retorna os últimos n_meses com dados reais 2026 do canal LOJA, anteriores ao mês atual.
+    Filtra pelo canal para evitar duplicatas (LOJA vs outros canais).
+    Cada item: dict com MES, BM, I/B, PM, BOLETOS, FATURAMENTO, META e refs 2025.
     """
-    df = analise[
+    mask = (
         (analise['BCPS'] == bcps) &
         (analise['MES'] < mes_atual) &
         (analise['FATURAMENTO'].notna())
-    ].sort_values('MES').tail(n_meses)
+    )
+    # Filtra pelo canal informado; fallback para qualquer canal se não houver dados
+    df_canal = analise[mask & (analise['CANAL'] == canal)]
+    if df_canal.empty:
+        df_canal = analise[mask]
 
-    cols = ['MES', 'FATURAMENTO', 'BOLETOS', 'BM', 'I/B', 'PM',
+    df = df_canal.sort_values('MES').tail(n_meses)
+
+    cols = ['MES', 'CANAL', 'FATURAMENTO', 'BOLETOS', 'BM', 'I/B', 'PM',
             'META', 'BM_2025', 'IB_2025', 'PM_2025', 'BOL_2025']
     cols_ok = [c for c in cols if c in df.columns]
     return df[cols_ok].to_dict('records')
