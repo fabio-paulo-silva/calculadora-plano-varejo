@@ -1,7 +1,11 @@
 """
 llm_sugestao.py
-Integração com Groq (LLaMA 3.3 70B) para geração de planos de ação e chat estratégico.
+Integração com DeepSeek (primário) ou Groq (fallback) para geração de planos de ação.
 Canal LOJA — Varejo Físico de Perfumaria e Cosméticos | IAF 2026.
+
+Configuração em .streamlit/secrets.toml:
+  DEEPSEEK_API_KEY = "sk-..."   # primário — platform.deepseek.com
+  GROQ_API_KEY     = "gsk_..."  # fallback
 """
 
 import os
@@ -11,13 +15,28 @@ import streamlit as st
 
 _IAF_CONTEXT_PATH = pathlib.Path(__file__).parent / "iaf_context_loja.md"
 
+# Contexto IAF compacto — enviado no system prompt (reduz tokens)
+# Versão completa lida do arquivo; resumo hardcoded para economizar tokens
+_IAF_COMPACTO = """Você é consultor de varejo físico de cosméticos O Boticário. Canal LOJA apenas.
+
+GLOSSÁRIO: BM=Boleto Médio(Fat/Boletos) | I/B=Itens por Boleto | PM=Preço Médio | BT=Boleto Turbinado | BP=Boleto Promocional
+
+ALAVANCAS BM: BT+BP em todo atendimento | Resgate Fidelidade (clientes que resgatam gastam mais) | Serviços (cliente na cadeira compra mais) | mix premium
+ALAVANCAS I/B: venda sugestiva | BT | BP | kits/combos | Desafios Beautybox
+ALAVANCAS PM: mix premium | disciplina de desconto | Cuidados Faciais | gifting
+ALAVANCAS BOLETOS: CRM ativo (inativos 60+ dias) | Loja Digital (WhatsApp) | conversão da Ação de Fluxo
+
+AÇÃO DE FLUXO: já existe — NÃO sugira implementar. Foco: converter quem veio buscar brinde em comprador (BT/BP no balcão no momento do resgate).
+
+IAF PONTOS-CHAVE (canal loja): Meta Receita Loja=100pts | NPS=35pts | Serviços=35pts | Resgate Fidelidade=25pts | ID Cliente=25pts
+
+REGRAS: sem jargão estatístico (mediana/percentil/top25%) | use "maioria das lojas [cluster]" | nunca mencione VD/revendedoras/Eudora | respostas em português BR direto."""
+
 
 @st.cache_data(show_spinner=False)
 def _carregar_contexto_iaf() -> str:
-    try:
-        return _IAF_CONTEXT_PATH.read_text(encoding="utf-8")
-    except FileNotFoundError:
-        return ""
+    """Retorna contexto compacto (economiza tokens). Fallback para arquivo completo."""
+    return _IAF_COMPACTO
 
 
 def _fmt_moeda(v) -> str:
@@ -292,25 +311,45 @@ def interpretar_tendencia(tendencia: list) -> list:
     return conclusoes
 
 
-def _get_client():
-    """Retorna cliente Groq autenticado."""
+def _get_secret(key: str) -> str:
+    """Lê chave de st.secrets ou variável de ambiente."""
     try:
-        from groq import Groq  # type: ignore
-    except ImportError as exc:
-        raise ImportError("Pacote 'groq' não instalado. Adicione 'groq' ao requirements.txt.") from exc
-
-    api_key = None
-    try:
-        api_key = st.secrets["GROQ_API_KEY"]
+        v = st.secrets.get(key)
+        if v:
+            return v
     except Exception:
         pass
-    if not api_key:
-        api_key = os.environ.get("GROQ_API_KEY")
-    if not api_key:
-        raise ValueError("GROQ_API_KEY não encontrada. Configure em .streamlit/secrets.toml.")
+    return os.environ.get(key, "")
 
-    from groq import Groq  # type: ignore
-    return Groq(api_key=api_key)
+
+def _get_client() -> tuple:
+    """
+    Retorna (client, model) usando DeepSeek se configurado, senão Groq.
+    DeepSeek usa SDK openai com base_url diferente.
+    """
+    deepseek_key = _get_secret("DEEPSEEK_API_KEY")
+    groq_key     = _get_secret("GROQ_API_KEY")
+
+    if deepseek_key:
+        try:
+            from openai import OpenAI  # type: ignore
+        except ImportError as exc:
+            raise ImportError("Pacote 'openai' não instalado. Adicione 'openai' ao requirements.txt.") from exc
+        client = OpenAI(api_key=deepseek_key, base_url="https://api.deepseek.com")
+        return client, "deepseek-chat"
+
+    if groq_key:
+        try:
+            from groq import Groq  # type: ignore
+        except ImportError as exc:
+            raise ImportError("Pacote 'groq' não instalado. Adicione 'groq' ao requirements.txt.") from exc
+        from groq import Groq  # type: ignore
+        return Groq(api_key=groq_key), "llama-3.3-70b-versatile"
+
+    raise ValueError(
+        "Nenhuma chave de API configurada. "
+        "Adicione DEEPSEEK_API_KEY ou GROQ_API_KEY em .streamlit/secrets.toml."
+    )
 
 
 # ── Geração do plano inicial ──────────────────────────────────────────────────
@@ -487,15 +526,15 @@ Use EXATAMENTE estes títulos markdown (sem adicionar outros):
 
 Máximo {max_words} palavras. Sem introdução. Sem conclusão. Cada ação começa com um verbo."""
 
-    client = _get_client()
+    client, model = _get_client()
     response = client.chat.completions.create(
-        model="llama-3.3-70b-versatile",
+        model=model,
         messages=[
             {"role": "system", "content": _system_prompt(dados)},
             {"role": "user",   "content": prompt_usuario},
         ],
         temperature=0.2,
-        max_tokens=800,
+        max_tokens=700,
     )
     return response.choices[0].message.content.strip()
 
