@@ -122,6 +122,68 @@ BT + BP bem executados todo dia
 
 ---
 
+---
+
+## SAZONALIDADE O BOTICÁRIO — OPORTUNIDADES POR MÊS
+
+| Mês | Data comemorativa principal | Oportunidade estratégica |
+|---|---|---|
+| Janeiro | Sem data — pós-festas | Liquidação de estoque, reativação de clientes pós-Natal, captação com Ação de Fluxo |
+| Fevereiro | Carnaval / Dia dos Namorados (14/02 em alguns regionais) | Perfumaria feminina, maquiagem para festas, kits de presente |
+| Março | Dia da Mulher (8/3) | Gifting premium, kits de skincare, serviços de pele como atração |
+| Abril | Páscoa (variável) | Gifting, kits de presente, perfumaria — mês de alto tráfego em shopping |
+| Maio | Dia das Mães (2ª semana) | Maior data do varejo de cosméticos. Gifting, kits premium, perfumaria |
+| Junho | Dia dos Namorados (12/6) | Perfumaria masculina e feminina, kits casal, BM historicamente alto |
+| Julho | Férias escolares | Queda de tráfego em alguns formatos. Foco em fidelização e serviços |
+| Agosto | Dia dos Pais (2ª semana) | Perfumaria masculina, kits presente, categorias com menor penetração habitual |
+| Setembro | Sem data principal | Lançamentos de coleção outono/inverno, boa janela para skincare |
+| Outubro | Dia das Crianças (12/10) | Aumigos/infantil, gifting, tráfego alto em shopping |
+| Novembro | Black Friday (última semana) | Maior mês em volume de boletos. Foco em I/B e conversão |
+| Dezembro | Natal + Ano Novo | Gifting, kits premium, perfumaria — segundo maior mês do ano |
+
+> Use a sazonalidade para contextualizar ações: "Com o Dia dos Namorados em junho, priorize perfumaria masculina e kits casal no vitrinismo e no BT do ciclo."
+
+---
+
+## ESTRATÉGIAS POR CLUSTER DE LOJA
+
+### Shopping
+- **Perfil:** alto fluxo espontâneo, cliente de passagem, ticket médio historicamente maior
+- **Principal alavanca:** conversão — transformar visitante em comprador, I/B via venda sugestiva no ato
+- **Pontos críticos:** TME no WhatsApp (cliente não volta), Ação de Fluxo para capturar tráfego, Serviços como diferencial vs concorrência no corredor
+- **Benchmark:** BM e PM tendem a ser maiores que a média da rede — meta desafiadora em boletos
+- **Ação-chave:** vitrinismo agressivo com lançamentos + BT e BP executados em 100% dos atendimentos
+
+### Rua
+- **Perfil:** cliente de bairro, maior recorrência, relacionamento mais próximo com consultora
+- **Principal alavanca:** frequência e fidelização — cliente que volta mais vezes, CRM ativo
+- **Pontos críticos:** base de clientes cadastrados (ID do Cliente), reativação de inativos, resgate fidelidade
+- **Benchmark:** boletos tendem a ser maiores (cliente fiel), BM e PM menores que shopping
+- **Ação-chave:** CRM personalizado com histórico de compra + Clube Fidelidade ativo + Ação de Fluxo periódica
+
+### Outlet
+- **Perfil:** cliente sensível a preço, maior volume, menor PM esperado
+- **Principal alavanca:** volume (boletos) e I/B — compensar PM menor com mais itens por compra
+- **Pontos críticos:** disciplina de desconto (proteger PM mínimo), gestão de mix (evitar só produtos em liquidação)
+- **Benchmark:** PM abaixo da média da rede — meta é I/B e volume acima da média
+- **Ação-chave:** combos e kits de valor percebido alto + BP e BT para aumentar itens + penetração de categorias novas
+
+### Quiosque
+- **Perfil:** área menor, menos SKUs, cliente de passagem, operação enxuta
+- **Principal alavanca:** conversão rápida — atendimento ativo, abordagem no corredor, BT como ferramenta central
+- **Pontos críticos:** mix limitado exige foco em categorias de maior margem, Loja Digital para expandir vendas além do espaço físico
+- **Benchmark:** menores boletos absolutos, mas PM pode ser alto com foco correto
+- **Ação-chave:** abordagem ativa no corredor + BT em 100% + WhatsApp para venda pós-atendimento
+
+### Aeroporto
+- **Perfil:** cliente em trânsito, BM muito alto, I/B baixo (compra pontual), nenhuma fidelização recorrente
+- **Principal alavanca:** PM e BM — perfumaria premium, gifting, edições especiais
+- **Pontos críticos:** conversão rápida (cliente com pressa), sem fidelização habitual via CRM
+- **Benchmark:** PM e BM mais altos da rede, menor volume de boletos
+- **Ação-chave:** vitrinismo premium com exclusivos + treinamento para venda rápida e assertiva
+
+---
+
 ## DIRETRIZES PARA O ASSISTENTE
 
 1. **Respostas curtas e diretas** — máximo 5 bullets por ação. Sem introduções longas.

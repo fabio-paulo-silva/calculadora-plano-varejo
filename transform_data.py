@@ -214,8 +214,69 @@ def preparar_dcentros(dcentros: pd.DataFrame) -> pd.DataFrame:
     return df.dropna(subset=['BCPS']).drop_duplicates(subset=['BCPS'])
 
 
+def tendencia_loja(analise: pd.DataFrame, bcps: int, mes_atual: int, n_meses: int = 3) -> list:
+    """
+    Retorna os últimos n_meses com dados reais 2026 anteriores ao mês atual.
+    Cada item: dict com MES, BM, I/B, PM, BOLETOS, META, FATURAMENTO e refs 2025.
+    """
+    df = analise[
+        (analise['BCPS'] == bcps) &
+        (analise['MES'] < mes_atual) &
+        (analise['FATURAMENTO'].notna())
+    ].sort_values('MES').tail(n_meses)
+
+    cols = ['MES', 'FATURAMENTO', 'BOLETOS', 'BM', 'I/B', 'PM',
+            'META', 'BM_2025', 'IB_2025', 'PM_2025', 'BOL_2025']
+    cols_ok = [c for c in cols if c in df.columns]
+    return df[cols_ok].to_dict('records')
+
+
+def benchmark_cluster(
+    analise: pd.DataFrame,
+    mes: int,
+    clusters: pd.DataFrame,
+    bcps: int,
+) -> dict:
+    """
+    Calcula benchmarks (mediana e P75) de BM_2025, IB_2025, PM_2025 para o mês.
+
+    - Se clusters tiver dados, filtra pelo mesmo CLUSTER do BCPS informado.
+    - Fallback: usa todas as lojas do mesmo mês (benchmark geral).
+
+    Retorna dict com: cluster_nome, n_lojas, p50/p75 para BM, IB, PM, BOL.
+    """
+    cluster_nome = "Geral"
+    df_bench = analise[analise['MES'] == mes].drop_duplicates(subset=['BCPS'])
+
+    if not clusters.empty and bcps in clusters['BCPS'].values:
+        cluster_nome = clusters.loc[clusters['BCPS'] == bcps, 'CLUSTER'].iloc[0]
+        bcps_cluster = clusters.loc[clusters['CLUSTER'] == cluster_nome, 'BCPS'].tolist()
+        df_filtrado  = df_bench[df_bench['BCPS'].isin(bcps_cluster)]
+        if len(df_filtrado) >= 3:          # mínimo para benchmark ter sentido
+            df_bench = df_filtrado
+
+    cols_ref = ['BM_2025', 'IB_2025', 'PM_2025', 'BOL_2025']
+    df_bench = df_bench[cols_ref].dropna()
+
+    if df_bench.empty:
+        return {"cluster_nome": cluster_nome, "n_lojas": 0}
+
+    return {
+        "cluster_nome": cluster_nome,
+        "n_lojas":  len(df_bench),
+        "p50_bm":   round(df_bench['BM_2025'].median(), 2),
+        "p75_bm":   round(df_bench['BM_2025'].quantile(0.75), 2),
+        "p50_ib":   round(df_bench['IB_2025'].median(), 2),
+        "p75_ib":   round(df_bench['IB_2025'].quantile(0.75), 2),
+        "p50_pm":   round(df_bench['PM_2025'].median(), 2),
+        "p75_pm":   round(df_bench['PM_2025'].quantile(0.75), 2),
+        "p50_bol":  round(df_bench['BOL_2025'].median(), 0),
+        "p75_bol":  round(df_bench['BOL_2025'].quantile(0.75), 0),
+    }
+
+
 def carregar_tudo():
-    metas_raw, raw_data, dcentros_raw = load_data_url()
+    metas_raw, raw_data, dcentros_raw, clusters = load_data_url()
     metas     = tratar_metas(metas_raw)
     df_varejo = tratar_dados_varejo(raw_data)
     base      = agrupar_mensal(df_varejo)
@@ -228,4 +289,4 @@ def carregar_tudo():
         dcentros[['BCPS', 'LOJA', 'PRACA', 'GVO', 'GCVO', 'GRVO']],
         on='BCPS', how='left'
     )
-    return analise, hist_max, metas, base, dcentros
+    return analise, hist_max, metas, base, dcentros, clusters

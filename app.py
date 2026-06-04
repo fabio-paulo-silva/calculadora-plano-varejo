@@ -5,7 +5,7 @@ import streamlit as st
 
 from llm_sugestao import chat_estrategico, gerar_plano_inicial
 from plano_acao import carregar_historico, gerar_pdf, salvar_historico
-from transform_data import carregar_tudo
+from transform_data import benchmark_cluster, carregar_tudo, tendencia_loja
 
 NOMES_MESES = {
     1: "Janeiro", 2: "Fevereiro", 3: "Março", 4: "Abril",
@@ -231,7 +231,7 @@ if "llm_dados" not in st.session_state:
     st.session_state["llm_dados"] = {}     # dados da loja usados no chat
 
 try:
-    analise, hist_max, metas, base, dcentros = load_data()
+    analise, hist_max, metas, base, dcentros, clusters = load_data()
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
@@ -515,15 +515,15 @@ if st.session_state.get("llm_chave") != _llm_chave_atual:
     st.session_state["llm_chat"]  = []
     st.session_state["llm_dados"] = {}
 
-# Captura variáveis necessárias dentro do fragment via snapshot
+# Calcula tendência e benchmark fora do fragment (acesso ao analise/clusters)
+_loja_dc = dcentros[dcentros['BCPS'] == int(bcps_selecionado)]
 _snap = {
     "loja_nome": loja_map.get(int(bcps_selecionado), f"Loja {int(bcps_selecionado)}"),
     "bcps":      int(bcps_selecionado),
     "mes_nome":  NOMES_MESES.get(mes_selecionado, str(mes_selecionado)),
-    "regional":  dcentros[dcentros['BCPS'] == int(bcps_selecionado)].iloc[0].get("GRVO", "—")
-                 if not dcentros[dcentros['BCPS'] == int(bcps_selecionado)].empty else "—",
-    "praca":     dcentros[dcentros['BCPS'] == int(bcps_selecionado)].iloc[0].get("PRACA", "—")
-                 if not dcentros[dcentros['BCPS'] == int(bcps_selecionado)].empty else "—",
+    "mes_num":   mes_selecionado,
+    "regional":  _loja_dc.iloc[0].get("GRVO", "—") if not _loja_dc.empty else "—",
+    "praca":     _loja_dc.iloc[0].get("PRACA", "—") if not _loja_dc.empty else "—",
     "meta":      meta,    "bol_proj": bol_proj,
     "bm_nec":    bm_nec,  "ib_nec":   ib_nec,  "pm_nec": pm_nec,  "bol_nec": bol_nec,
     "bm_ref":    bm_ref,  "ib_ref":   ib_ref,  "pm_ref": pm_ref,  "bol_ref": bol_ref,
@@ -531,6 +531,13 @@ _snap = {
     "var_bm":    _safe(row.get("VAR_BM")), "var_ib": _safe(row.get("VAR_IB")),
     "var_pm":    _safe(row.get("VAR_PM")), "var_bol": _safe(row.get("VAR_BOL")),
     "llm_chave": _llm_chave_atual,
+    # Contexto calculado
+    "tendencia": tendencia_loja(analise, int(bcps_selecionado), mes_selecionado),
+    "benchmark": benchmark_cluster(analise, mes_selecionado, clusters, int(bcps_selecionado)),
+    # Contexto declarado pelo gestor (inicializa com defaults; atualizado no fragment)
+    "tipo_loja":       st.session_state.get("ctx_tipo_loja", "Não informado"),
+    "tamanho_equipe":  st.session_state.get("ctx_equipe", "?"),
+    "desafio_principal": st.session_state.get("ctx_desafio", "Não informado"),
 }
 st.session_state["_snap"] = _snap   # disponível dentro do fragment
 
@@ -544,6 +551,37 @@ def secao_ia():
     st.markdown("---")
     st.markdown("##### ✨ Plano de Ação com IA")
     st.caption("Groq · LLaMA 3.3 70B · IAF 2026 — personalizado para esta loja")
+
+    # ── Contexto da loja (formulário rápido) ──────────────────────────────────
+    with st.expander("⚙️ Contexto da loja — preencha para um plano mais preciso", expanded=False):
+        ctx_col1, ctx_col2, ctx_col3 = st.columns(3)
+        with ctx_col1:
+            tipo_loja = st.selectbox(
+                "Tipo de loja",
+                ["Não informado", "Shopping", "Rua", "Outlet", "Quiosque", "Aeroporto"],
+                key="ctx_tipo_loja",
+            )
+        with ctx_col2:
+            tamanho_equipe = st.number_input(
+                "Nº de consultores", min_value=1, max_value=50,
+                value=int(st.session_state.get("ctx_equipe", 3) or 3),
+                step=1, key="ctx_equipe",
+            )
+        with ctx_col3:
+            desafio = st.selectbox(
+                "Principal desafio atual",
+                [
+                    "Não informado",
+                    "Fluxo de clientes baixo",
+                    "Equipe nova / em treinamento",
+                    "Mix de produtos inadequado",
+                    "Concorrência forte na praça",
+                    "Ticket médio abaixo do esperado",
+                    "Alta rotatividade de equipe",
+                    "Outro",
+                ],
+                key="ctx_desafio",
+            )
 
     # ── Foco + botão ──────────────────────────────────────────────────────────
     foco_opcoes = {
@@ -562,7 +600,13 @@ def secao_ia():
         gerar_llm = st.button("✨ Gerar Plano", use_container_width=True, type="primary")
 
     if gerar_llm:
-        dados_llm = {**snap, "foco": st.session_state.get("llm_foco", "combinado")}
+        dados_llm = {
+            **snap,
+            "foco":             st.session_state.get("llm_foco", "combinado"),
+            "tipo_loja":        st.session_state.get("ctx_tipo_loja", "Não informado"),
+            "tamanho_equipe":   st.session_state.get("ctx_equipe", "?"),
+            "desafio_principal":st.session_state.get("ctx_desafio", "Não informado"),
+        }
         with st.spinner("Gerando plano personalizado..."):
             try:
                 plano = gerar_plano_inicial(dados_llm)
