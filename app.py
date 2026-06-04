@@ -14,41 +14,6 @@ NOMES_MESES = {
 
 st.set_page_config(page_title="Calculadora de Metas", layout="wide", page_icon="🎯")
 
-st.markdown("""
-<style>
-/* ── Cards nos st.metric ──────────────────────────────────────────────────── */
-[data-testid="metric-container"] {
-    background: #ffffff;
-    border: 1px solid #e2e8f4;
-    border-top: 4px solid #4361ee;
-    border-radius: 0 0 12px 12px;
-    padding: 18px 22px 16px 22px;
-    box-shadow: 0 2px 10px rgba(67, 97, 238, 0.07);
-    transition: box-shadow 0.2s ease, transform 0.15s ease;
-}
-[data-testid="metric-container"]:hover {
-    box-shadow: 0 6px 20px rgba(67, 97, 238, 0.14);
-    transform: translateY(-2px);
-}
-[data-testid="stMetricLabel"] {
-    font-size: 0.72rem !important;
-    color: #64748b !important;
-    font-weight: 600 !important;
-    text-transform: uppercase;
-    letter-spacing: 0.07em;
-}
-[data-testid="stMetricValue"] {
-    font-size: 1.8rem !important;
-    font-weight: 700 !important;
-    color: #1e293b !important;
-    letter-spacing: -0.02em;
-}
-[data-testid="stMetricDelta"] svg {
-    display: none;
-}
-</style>
-""", unsafe_allow_html=True)
-
 
 @st.cache_data(ttl=3600, show_spinner="Carregando dados...")
 def load_data():
