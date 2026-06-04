@@ -614,7 +614,19 @@ def secao_ia():
             except ValueError as e:
                 st.error(f"⚠️ {e}"); return
             except Exception as e:
-                st.error(f"❌ Erro ao chamar a IA: {e}"); return
+                msg = str(e)
+                if "429" in msg or "rate_limit" in msg.lower():
+                    import re as _re
+                    wait = _re.search(r'try again in (\d+m\d+s|\d+\.\d+s)', msg)
+                    tempo = f" Tente novamente em **{wait.group(1)}**." if wait else " Tente novamente em alguns minutos."
+                    st.warning(
+                        f"⏳ **Limite diário de tokens do Groq atingido.**{tempo}\n\n"
+                        f"O plano gratuito permite 100.000 tokens/dia. "
+                        f"Para uso ilimitado, faça upgrade em [console.groq.com](https://console.groq.com/settings/billing)."
+                    )
+                else:
+                    st.error(f"❌ Erro ao chamar a IA: {e}")
+                return
 
     # ── Plano gerado — recolhível ─────────────────────────────────────────────
     if not st.session_state.get("llm_plano"):
