@@ -157,6 +157,95 @@ def _system_prompt(dados: dict) -> str:
 {_bloco_benchmark(dados)}"""
 
 
+def interpretar_tendencia(tendencia: list) -> list:
+    """
+    Recebe a lista de meses da loja e retorna frases de diagnóstico prontas.
+    Usado tanto na UI (visível ao gestor) quanto no prompt do LLM.
+    """
+    conclusoes = []
+    if len(tendencia) < 2:
+        return conclusoes
+
+    tendencias_ind = {}
+    for ind, chave in [("BM", "BM"), ("I/B", "I/B"), ("PM", "PM"), ("Boletos", "BOLETOS")]:
+        vals = [m.get(chave) for m in tendencia if m.get(chave) is not None]
+        meses = [NOMES_MESES.get(m.get('MES', 0), '')[:3] for m in tendencia if m.get(chave) is not None]
+        if len(vals) < 2:
+            continue
+        delta = vals[-1] - vals[0]
+        pct   = delta / vals[0] if vals[0] else 0
+        # Conta meses consecutivos na mesma direção
+        consec = 1
+        for i in range(len(vals) - 1, 0, -1):
+            if (vals[i] >= vals[i-1]) == (delta >= 0):
+                consec += 1
+            else:
+                break
+        tendencias_ind[ind] = {
+            "vals": vals, "meses": meses,
+            "pct": pct, "dir": "subindo" if delta > 0 else "caindo", "consec": consec
+        }
+
+    bm  = tendencias_ind.get("BM", {})
+    ib  = tendencias_ind.get("I/B", {})
+    pm  = tendencias_ind.get("PM", {})
+    bol = tendencias_ind.get("Boletos", {})
+
+    fmt_bm  = lambda v: _fmt_moeda(v)
+    fmt_ib  = lambda v: _fmt_num(v, 1)
+    fmt_bol = lambda v: _fmt_num(v, 0)
+
+    # Padrão 1: I/B caindo consecutivamente → problema de processo
+    if ib.get("dir") == "caindo" and ib.get("consec", 0) >= 2:
+        v = ib["vals"]
+        conclusoes.append(
+            f"⚠️ I/B caindo há {ib['consec']} meses seguidos "
+            f"({fmt_ib(v[0])} → {fmt_ib(v[-1])}, {_fmt_pct(ib['pct'])}): "
+            f"problema de processo — equipe não está executando venda sugestiva e BT/BP."
+        )
+
+    # Padrão 2: BM subindo mas Boletos caindo → fluxo é o gap
+    if bm.get("dir") == "subindo" and bol.get("dir") == "caindo":
+        conclusoes.append(
+            f"⚠️ BM crescendo ({_fmt_pct(bm['pct'])}) mas Boletos caindo ({_fmt_pct(bol['pct'])}): "
+            f"a equipe vende bem para quem entra, mas o fluxo está diminuindo. "
+            f"Foco em CRM, Loja Digital e conversão da Ação de Fluxo."
+        )
+
+    # Padrão 3: BM e PM caindo → mix migrando para itens baratos
+    if bm.get("dir") == "caindo" and pm.get("dir") == "caindo":
+        conclusoes.append(
+            f"⚠️ BM e PM caindo juntos ({_fmt_pct(bm['pct'])} e {_fmt_pct(pm['pct'])}): "
+            f"mix migrando para produtos de menor valor — revisar disciplina de desconto e categorias premium."
+        )
+
+    # Padrão 4: Boletos E I/B caindo → queda dupla
+    if bol.get("dir") == "caindo" and ib.get("dir") == "caindo" and not any("I/B caindo" in c for c in conclusoes):
+        conclusoes.append(
+            f"🔴 Boletos e I/B caindo juntos: menos clientes E menos produtividade por atendimento. "
+            f"Ação urgente em fluxo e em execução de BT/BP."
+        )
+
+    # Padrão 5: tudo subindo
+    if all(d.get("dir") == "subindo" for d in [bm, ib, pm, bol] if d):
+        conclusoes.append(
+            f"✅ Loja em crescimento consistente em todos os indicadores — manter ritmo e não perder o que está funcionando."
+        )
+
+    # Sem padrão claro: lista os que variam mais de 5%
+    if not conclusoes:
+        for ind, d in tendencias_ind.items():
+            if abs(d["pct"]) >= 0.05:
+                v = d["vals"]
+                fmt = fmt_bm if ind in ("BM", "PM") else (fmt_bol if ind == "Boletos" else fmt_ib)
+                conclusoes.append(
+                    f"{'↑' if d['dir'] == 'subindo' else '↓'} {ind} {d['dir']} "
+                    f"{_fmt_pct(d['pct'])} ({fmt(v[0])} → {fmt(v[-1])})."
+                )
+
+    return conclusoes
+
+
 def _get_client():
     """Retorna cliente Groq autenticado."""
     try:
@@ -201,81 +290,30 @@ def gerar_plano_inicial(dados: dict) -> str:
     mes_num = dados.get('mes_num') or dados.get('mes_selecionado', 0)
     sazonalidade = sazonalidade_map.get(int(mes_num), "")
 
-    # ── Tendência: série + conclusão diagnóstica automática ───────────────────
+    # ── Tendência: série + conclusões diagnósticas ────────────────────────────
     tendencia = dados.get('tendencia', [])
-    insight_tendencia = "Sem histórico de meses anteriores disponível (primeira análise ou dados insuficientes)."
-    conclusoes_tendencia = []   # frases prontas de diagnóstico para o LLM usar
+    insight_tendencia = "Sem histórico de meses anteriores disponível."
 
     if len(tendencia) >= 2:
+        # Série numérica
         linhas_serie = []
-        tendencias_ind = {}  # ind → (vals, pct, n_meses_consecutivos, direcao)
-
         for ind, chave in [("BM", "BM"), ("I/B", "I/B"), ("PM", "PM"), ("Boletos", "BOLETOS")]:
             vals  = [m.get(chave) for m in tendencia if m.get(chave) is not None]
             meses = [NOMES_MESES.get(m.get('MES', 0), '')[:3] for m in tendencia if m.get(chave) is not None]
             if len(vals) < 2:
                 continue
-
-            fmt = _fmt_moeda if ind in ("BM", "PM") else (lambda v: _fmt_num(v, 0)) if ind == "Boletos" else _fmt_num
-            serie = " → ".join(fmt(v) for v in vals)
+            fmt   = _fmt_moeda if ind in ("BM", "PM") else (lambda v: _fmt_num(v, 0)) if ind == "Boletos" else _fmt_num
             delta = vals[-1] - vals[0]
             pct   = delta / vals[0] if vals[0] else 0
-            dir_  = "subindo" if delta > 0 else "caindo"
+            dir_  = "↑" if delta > 0 else "↓"
+            serie = " → ".join(fmt(v) for v in vals)
+            linhas_serie.append(f"- {ind}: {serie} [{', '.join(meses)}] {dir_} {_fmt_pct(pct)}")
 
-            # Conta meses consecutivos na mesma direção (do mais recente para o mais antigo)
-            consecutivos = 1
-            for i in range(len(vals) - 1, 0, -1):
-                if (vals[i] > vals[i-1]) == (delta > 0):
-                    consecutivos += 1
-                else:
-                    break
-
-            tendencias_ind[ind] = {"vals": vals, "pct": pct, "dir": dir_, "consec": consecutivos, "meses": meses}
-            linhas_serie.append(f"- **{ind}:** {serie} [{', '.join(meses)}] → {dir_} {_fmt_pct(pct)}")
-
-        # Gera conclusões diagnósticas automáticas
-        bm  = tendencias_ind.get("BM", {})
-        ib  = tendencias_ind.get("I/B", {})
-        pm  = tendencias_ind.get("PM", {})
-        bol = tendencias_ind.get("Boletos", {})
-
-        if ib.get("dir") == "caindo" and ib.get("consec", 0) >= 2:
-            n = ib["consec"]
-            conclusoes_tendencia.append(
-                f"🔴 I/B caindo há {n} {'meses seguidos' if n > 1 else 'mês'} ({ib['meses'][0]} a {ib['meses'][-1]}) — "
-                f"isso não é problema de meta, é problema de PROCESSO: a equipe não está executando venda sugestiva e BT/BP."
-            )
-        if bm.get("dir") == "subindo" and bol.get("dir") == "caindo":
-            conclusoes_tendencia.append(
-                f"⚠️ BM crescendo mas Boletos caindo — a equipe vende bem para quem entra, mas o FLUXO está diminuindo. "
-                f"O foco deve ser trazer mais clientes (CRM, Loja Digital, conversão da Ação de Fluxo)."
-            )
-        if bm.get("dir") == "caindo" and pm.get("dir") == "caindo":
-            conclusoes_tendencia.append(
-                f"🔴 BM e PM caindo juntos — mix de produtos migrando para itens de menor valor. "
-                f"Avaliar disciplina de desconto e direcionamento de categorias premium."
-            )
-        if bm.get("dir") == "subindo" and ib.get("dir") == "subindo" and bol.get("dir") == "subindo":
-            conclusoes_tendencia.append(
-                f"🟢 Loja em crescimento consistente nos 3 indicadores — manter ritmo e focar em não perder o que está funcionando."
-            )
-        if bol.get("dir") == "caindo" and ib.get("dir") == "caindo":
-            conclusoes_tendencia.append(
-                f"🔴 Boletos E I/B caindo ao mesmo tempo — queda dupla: menos clientes e menos produtividade por atendimento. "
-                f"Ação urgente em fluxo (CRM, Ação de Fluxo) e em processo de venda (BT/BP)."
-            )
-
-        if not conclusoes_tendencia and linhas_serie:
-            # Sem padrão claro, apenas mostra direção
-            for ind, dados_ind in tendencias_ind.items():
-                if abs(dados_ind["pct"]) > 0.05:  # só cita se variação > 5%
-                    conclusoes_tendencia.append(
-                        f"{ind} {dados_ind['dir']} {_fmt_pct(dados_ind['pct'])} nos últimos meses."
-                    )
-
-        serie_txt = "\n".join(linhas_serie) if linhas_serie else "Dados disponíveis mas sem variação significativa."
-        conclusoes_txt = "\n".join(conclusoes_tendencia) if conclusoes_tendencia else "Sem padrão claro de tendência."
-        insight_tendencia = f"**Série histórica:**\n{serie_txt}\n\n**Conclusão diagnóstica:**\n{conclusoes_txt}"
+        # Conclusões diagnósticas (mesma função usada na UI)
+        conclusoes = interpretar_tendencia(tendencia)
+        conclusoes_txt = "\n".join(conclusoes) if conclusoes else "Sem variação relevante identificada."
+        serie_txt = "\n".join(linhas_serie)
+        insight_tendencia = f"Série histórica desta loja:\n{serie_txt}\n\nDiagnóstico da tendência:\n{conclusoes_txt}"
 
     # ── Benchmark: posição vs cluster ─────────────────────────────────────────
     b = dados.get('benchmark', {})
@@ -361,9 +399,9 @@ Com base EXCLUSIVAMENTE nos dados acima, gere um plano focado em **{foco}**.
 Use EXATAMENTE estes títulos markdown:
 
 ### Diagnóstico
-2 frases diretas baseadas na conclusão diagnóstica acima:
-- Frase 1: copie e adapte a conclusão diagnóstica da tendência (ex: se diz "I/B caindo há 3 meses", diga "Seu I/B caiu de X para Y nos últimos 3 meses — isso é problema de processo, não de meta")
-- Frase 2: comparação com outras lojas em linguagem simples (ex: "Lojas {tipo_loja} parecidas vendem em média X a mais por boleto")
+Escreva EXATAMENTE 2 frases — use os números da série histórica acima:
+- Frase 1: cite o padrão da tendência com os números reais (ex: "Seu I/B caiu de 2,4 para 2,0 nos últimos 3 meses — isso é problema de execução da equipe, não de meta")
+- Frase 2: compare com outras lojas {tipo_loja} em linguagem simples, com número (ex: "Lojas {tipo_loja} parecidas vendem em média R$ X a mais por boleto — há espaço de Y% para crescer")
 
 ### Ação para Boleto Médio
 2 ações para atingir {_fmt_moeda(dados.get('bm_nec'))} — calibradas para {equipe} consultores e cluster {tipo_loja}. Cite o indicador IAF impactado pelo nome.

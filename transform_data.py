@@ -227,26 +227,48 @@ def tendencia_loja(
     n_meses: int = 4,
 ) -> list:
     """
-    Retorna os últimos n_meses com dados reais 2026 do canal LOJA, anteriores ao mês atual.
-    Filtra pelo canal para evitar duplicatas (LOJA vs outros canais).
-    Cada item: dict com MES, BM, I/B, PM, BOLETOS, FATURAMENTO, META e refs 2025.
+    Retorna os últimos n_meses de dados REAIS 2026 da loja, anteriores ao mês atual.
+    Agrega todos os canais por MES para obter visão consolidada da loja.
+    Recalcula BM, I/B e PM a partir dos totais agregados.
     """
     mask = (
         (analise['BCPS'] == bcps) &
         (analise['MES'] < mes_atual) &
         (analise['FATURAMENTO'].notna())
     )
-    # Filtra pelo canal informado; fallback para qualquer canal se não houver dados
-    df_canal = analise[mask & (analise['CANAL'] == canal)]
-    if df_canal.empty:
-        df_canal = analise[mask]
+    df_raw = analise[mask].copy()
+    if df_raw.empty:
+        return []
 
-    df = df_canal.sort_values('MES').tail(n_meses)
+    # Agrega todos os canais por mês — visão loja completa
+    agg_cols = {c: 'sum' for c in ['FATURAMENTO', 'BOLETOS', 'META',
+                                    'FAT_2025', 'BOL_2025', 'QTD_2025']
+                if c in df_raw.columns}
+    if 'QTD ITENS' in df_raw.columns:
+        agg_cols['QTD ITENS'] = 'sum'
 
-    cols = ['MES', 'CANAL', 'FATURAMENTO', 'BOLETOS', 'BM', 'I/B', 'PM',
+    df_agg = (
+        df_raw.groupby('MES', as_index=False)
+        .agg(agg_cols)
+        .sort_values('MES')
+        .tail(n_meses)
+    )
+
+    # Recalcula indicadores a partir dos totais
+    df_agg['BM']  = df_agg['FATURAMENTO'] / df_agg['BOLETOS'].replace(0, float('nan'))
+    if 'QTD ITENS' in df_agg.columns:
+        df_agg['I/B'] = df_agg['QTD ITENS'] / df_agg['BOLETOS'].replace(0, float('nan'))
+        df_agg['PM']  = df_agg['FATURAMENTO'] / df_agg['QTD ITENS'].replace(0, float('nan'))
+    if 'FAT_2025' in df_agg.columns and 'BOL_2025' in df_agg.columns:
+        df_agg['BM_2025'] = df_agg['FAT_2025'] / df_agg['BOL_2025'].replace(0, float('nan'))
+    if 'QTD_2025' in df_agg.columns and 'BOL_2025' in df_agg.columns:
+        df_agg['IB_2025'] = df_agg['QTD_2025'] / df_agg['BOL_2025'].replace(0, float('nan'))
+        df_agg['PM_2025'] = df_agg['FAT_2025'] / df_agg['QTD_2025'].replace(0, float('nan'))
+
+    cols = ['MES', 'FATURAMENTO', 'BOLETOS', 'BM', 'I/B', 'PM',
             'META', 'BM_2025', 'IB_2025', 'PM_2025', 'BOL_2025']
-    cols_ok = [c for c in cols if c in df.columns]
-    return df[cols_ok].to_dict('records')
+    cols_ok = [c for c in cols if c in df_agg.columns]
+    return df_agg[cols_ok].to_dict('records')
 
 
 def benchmark_cluster(

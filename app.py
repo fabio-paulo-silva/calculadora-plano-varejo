@@ -504,6 +504,58 @@ elif tipo == "info":
 else:
     st.warning(mensagem)
 
+# ── Seção: Tendência dos últimos meses ───────────────────────────────────────
+st.divider()
+st.markdown("#### 📈 Tendência dos últimos meses (loja)")
+
+_tend_rows = tendencia_loja(analise, int(bcps_selecionado), mes_selecionado)
+
+if not _tend_rows:
+    st.caption("_Sem dados de meses anteriores disponíveis para esta loja._")
+else:
+    def _seta(vals, i):
+        """Retorna seta de direção comparando com mês anterior."""
+        if i == 0 or vals[i] is None or vals[i-1] is None:
+            return ""
+        return " ↑" if vals[i] > vals[i-1] else (" ↓" if vals[i] < vals[i-1] else " →")
+
+    _meses_nomes = [NOMES_MESES.get(r['MES'], str(r['MES'])) for r in _tend_rows]
+    _bm_vals  = [_safe(r.get('BM'))  for r in _tend_rows]
+    _ib_vals  = [_safe(r.get('I/B')) for r in _tend_rows]
+    _pm_vals  = [_safe(r.get('PM'))  for r in _tend_rows]
+    _bol_vals = [_safe(r.get('BOLETOS')) for r in _tend_rows]
+    _fat_vals = [_safe(r.get('FATURAMENTO')) for r in _tend_rows]
+    _meta_vals = [_safe(r.get('META')) for r in _tend_rows]
+
+    _tend_df = pd.DataFrame({
+        "Mês": _meses_nomes,
+        "Faturamento": [formatar_moeda(v) for v in _fat_vals],
+        "vs Meta": [
+            f"{(_fat_vals[i]/_meta_vals[i]*100):.0f}%" if _fat_vals[i] and _meta_vals[i] else "—"
+            for i in range(len(_tend_rows))
+        ],
+        "BM": [
+            f"{formatar_moeda(_bm_vals[i])}{_seta(_bm_vals, i)}" for i in range(len(_tend_rows))
+        ],
+        "I/B": [
+            f"{formatar_numero(_ib_vals[i])}{_seta(_ib_vals, i)}" for i in range(len(_tend_rows))
+        ],
+        "PM": [
+            f"{formatar_moeda(_pm_vals[i])}{_seta(_pm_vals, i)}" for i in range(len(_tend_rows))
+        ],
+        "Boletos": [
+            f"{formatar_numero(_bol_vals[i], 0)}{_seta(_bol_vals, i)}" for i in range(len(_tend_rows))
+        ],
+    })
+    st.dataframe(_tend_df, use_container_width=True, hide_index=True)
+
+    # Conclusão automática de tendência (visível para o gestor)
+    from llm_sugestao import interpretar_tendencia
+    _concl = interpretar_tendencia(_tend_rows)
+    if _concl:
+        for c in _concl:
+            st.caption(c)
+
 # ── Seção IA: Plano personalizado ────────────────────────────────────────────
 _llm_chave_atual = f"{bcps_selecionado}_{mes_selecionado}"
 if st.session_state.get("llm_chave") != _llm_chave_atual:
