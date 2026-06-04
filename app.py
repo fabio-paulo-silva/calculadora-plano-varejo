@@ -668,25 +668,59 @@ def secao_ia():
 
 secao_ia()
 
-# Tabela comparativa com máximos históricos
+# Tabela comparativa com máximos históricos + benchmark do cluster
 if hist_row is not None:
-    st.markdown("**Comparativo com máximo histórico da loja:**")
-    def _fact(nec_key, max_key, fmt="moeda"):
-        nec = _safe(row.get(nec_key))
-        mx  = _safe(hist_row.get(max_key))
-        if nec is None or mx is None:
+    # Pega benchmark do cluster calculado no _snap
+    _bench = st.session_state.get("_snap", {}).get("benchmark", {})
+    _cluster_nome = _bench.get("cluster_nome", "")
+    _tem_bench = _bench.get("n_lojas", 0) > 0
+
+    _titulo = f"**Comparativo — histórico da loja vs realizados do cluster {_cluster_nome}:**" if _tem_bench else "**Comparativo com máximo histórico da loja:**"
+    st.markdown(_titulo)
+
+    def _fact_combinado(nec_key, max_key, bench_p50_key, bench_p75_key):
+        """Factibilidade considerando histórico próprio E cluster."""
+        nec    = _safe(row.get(nec_key))
+        mx     = _safe(hist_row.get(max_key))
+        p50    = _safe(_bench.get(bench_p50_key)) if _tem_bench else None
+        p75    = _safe(_bench.get(bench_p75_key)) if _tem_bench else None
+
+        if nec is None:
             return "—"
-        return "✅ Factível" if nec <= mx else "⚠️ Acima do histórico"
+
+        propria_ok  = mx  is not None and nec <= mx
+        cluster_p75 = p75 is not None and nec <= p75
+        cluster_p50 = p50 is not None and nec <= p50
+
+        if propria_ok:
+            return "✅ Já atingiu antes"
+        if cluster_p50:
+            return "🟡 Maioria do cluster atinge"
+        if cluster_p75:
+            return "🟠 Melhores do cluster atingem"
+        return "🔴 Acima do cluster"
+
+    def _fmt_bench(p50_key, p75_key, is_moeda=True):
+        """Mostra 'maioria: X | melhores: Y' do cluster."""
+        if not _tem_bench:
+            return "—"
+        p50 = _safe(_bench.get(p50_key))
+        p75 = _safe(_bench.get(p75_key))
+        fmt = formatar_moeda if is_moeda else lambda v: formatar_numero(v, 1)
+        fmt0 = formatar_moeda if is_moeda else lambda v: formatar_numero(v, 0)
+        if p50 is None:
+            return "—"
+        return f"{fmt(p50)} / {fmt(p75)}"
 
     tabela = pd.DataFrame({
         "Indicador": ["BM (Boleto Médio)", "Itens por Boleto", "PM (Preço Médio)", "Boletos"],
-        "Atual": [
-            formatar_moeda(row.get('BM')),
-            formatar_numero(row.get('I/B')),
-            formatar_moeda(row.get('PM')),
-            formatar_numero(row.get('BOLETOS_PROJ'), 0),
+        "Atual (2025)": [
+            formatar_moeda(row.get('BM_2025')),
+            formatar_numero(row.get('IB_2025')),
+            formatar_moeda(row.get('PM_2025')),
+            formatar_numero(row.get('BOL_2025'), 0),
         ],
-        "Necessário para meta": [
+        "Necessário": [
             formatar_moeda(row.get('BM_NECESSARIO')),
             formatar_numero(row.get('IB_NECESSARIO')),
             formatar_moeda(row.get('PM_NECESSARIO')),
@@ -698,14 +732,22 @@ if hist_row is not None:
             formatar_moeda(hist_row.get('MAX_PM')),
             formatar_numero(hist_row.get('MAX_BOLETOS'), 0),
         ],
+        f"Cluster {_cluster_nome}\n(maioria / melhores)": [
+            _fmt_bench('p50_bm', 'p75_bm', is_moeda=True),
+            _fmt_bench('p50_ib', 'p75_ib', is_moeda=False),
+            _fmt_bench('p50_pm', 'p75_pm', is_moeda=True),
+            _fmt_bench('p50_bol', 'p75_bol', is_moeda=False),
+        ],
         "Factível?": [
-            _fact('BM_NECESSARIO',       'MAX_BM'),
-            _fact('IB_NECESSARIO',       'MAX_IB'),
-            _fact('PM_NECESSARIO',       'MAX_PM'),
-            _fact('BOLETOS_NECESSARIOS', 'MAX_BOLETOS'),
+            _fact_combinado('BM_NECESSARIO',       'MAX_BM',       'p50_bm', 'p75_bm'),
+            _fact_combinado('IB_NECESSARIO',       'MAX_IB',       'p50_ib', 'p75_ib'),
+            _fact_combinado('PM_NECESSARIO',       'MAX_PM',       'p50_pm', 'p75_pm'),
+            _fact_combinado('BOLETOS_NECESSARIOS', 'MAX_BOLETOS',  'p50_bol','p75_bol'),
         ],
     })
     st.dataframe(tabela, use_container_width=True, hide_index=True)
+    if _tem_bench:
+        st.caption(f"Cluster {_cluster_nome}: {_bench.get('n_lojas',0)} lojas · maioria = 50% das lojas atingem · melhores = 25% das lojas atingem")
 
 st.divider()
 
