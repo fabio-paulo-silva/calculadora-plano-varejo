@@ -423,6 +423,28 @@ def gerar_plano_inicial(dados: dict) -> str:
         except Exception:
             return ""
 
+    # ── Monta seções de ação ANTES do f-string ───────────────────────────────
+    metas_por_secao = {
+        "Boleto Médio":     f"atingir {_fmt_moeda(dados.get('bm_nec'))} de BM. Use BT/BP e mix premium. Cite o indicador IAF impactado pelo nome.",
+        "Itens por Boleto": f"chegar em {_fmt_num(dados.get('ib_nec'))} I/B. Use BT/BP e conversão da Ação de Fluxo (brinde → compra paga).",
+        "Preço Médio":      f"atingir {_fmt_moeda(dados.get('pm_nec'))} de PM. Mix premium e sazonalidade de {mes_nome}.",
+        "Boletos":          f"alcançar {_fmt_num(dados.get('bol_nec'), 0)} boletos. CRM, Loja Digital, conversão da Ação de Fluxo.",
+    }
+    n_acoes   = 3 if len(secoes) == 1 else 2
+    max_words = 160 if len(secoes) == 1 else 260
+    n_kpis    = 3
+
+    secoes_prompt = "\n\n".join(
+        f"### Ação para {s}\n{n_acoes} ações práticas para {metas_por_secao[s]}"
+        for s in secoes
+    )
+
+    # ── Monta metas ──────────────────────────────────────────────────────────
+    meta_bm  = f"{_fmt_moeda(dados.get('bm_nec'))} (ref. 2025: {_fmt_moeda(dados.get('bm_ref'))}, var. {_fmt_pct(dados.get('var_bm'))}) — {_fact_txt(dados.get('bm_nec'), dados.get('max_bm'))}"
+    meta_ib  = f"{_fmt_num(dados.get('ib_nec'))} (ref. 2025: {_fmt_num(dados.get('ib_ref'))}, var. {_fmt_pct(dados.get('var_ib'))}) — {_fact_txt(dados.get('ib_nec'), dados.get('max_ib'))}"
+    meta_pm  = f"{_fmt_moeda(dados.get('pm_nec'))} (ref. 2025: {_fmt_moeda(dados.get('pm_ref'))}, var. {_fmt_pct(dados.get('var_pm'))}) — {_fact_txt(dados.get('pm_nec'), dados.get('max_pm'))}"
+    meta_bol = f"{_fmt_num(dados.get('bol_nec'),0)} (ref. 2025: {_fmt_num(dados.get('bol_ref'),0)}, var. {_fmt_pct(dados.get('var_bol'))}) — {_fact_txt(dados.get('bol_nec'), dados.get('max_bol'))}"
+
     prompt_usuario = f"""## CONTEXTO DESTA LOJA
 
 **Loja:** {dados.get('loja_nome','—')} | **Cluster:** {tipo_loja} | **Mês:** {mes_nome} 2026
@@ -430,10 +452,10 @@ def gerar_plano_inicial(dados: dict) -> str:
 
 ## METAS DO MÊS
 - Meta: **{_fmt_moeda(dados.get('meta'))}**
-- BM necessário: **{_fmt_moeda(dados.get('bm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('bm_ref'))}, var. {_fmt_pct(dados.get('var_bm'))}) — {_fact_txt(dados.get('bm_nec'), dados.get('max_bm'))}
-- I/B necessário: **{_fmt_num(dados.get('ib_nec'))}** (ref. 2025: {_fmt_num(dados.get('ib_ref'))}, var. {_fmt_pct(dados.get('var_ib'))}) — {_fact_txt(dados.get('ib_nec'), dados.get('max_ib'))}
-- PM necessário: **{_fmt_moeda(dados.get('pm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('pm_ref'))}, var. {_fmt_pct(dados.get('var_pm'))}) — {_fact_txt(dados.get('pm_nec'), dados.get('max_pm'))}
-- Boletos necessários: **{_fmt_num(dados.get('bol_nec'),0)}** (ref. 2025: {_fmt_num(dados.get('bol_ref'),0)}, var. {_fmt_pct(dados.get('var_bol'))}) — {_fact_txt(dados.get('bol_nec'), dados.get('max_bol'))}
+- BM necessário: **{meta_bm}**
+- I/B necessário: **{meta_ib}**
+- PM necessário: **{meta_pm}**
+- Boletos necessários: **{meta_bol}**
 
 ## TENDÊNCIA DOS ÚLTIMOS MESES (2026)
 {insight_tendencia}
@@ -464,32 +486,6 @@ Use EXATAMENTE estes títulos markdown (sem adicionar outros):
 {n_kpis} KPIs diários — focados em {foco}. Formato: "indicador — frequência".
 
 Máximo {max_words} palavras. Sem introdução. Sem conclusão. Cada ação começa com um verbo."""
-
-    # ── Monta seções de ação conforme o foco ─────────────────────────────────
-    metas_por_secao = {
-        "Boleto Médio":     f"atingir {_fmt_moeda(dados.get('bm_nec'))} de BM. Use BT/BP e mix premium. Cite o indicador IAF impactado pelo nome.",
-        "Itens por Boleto": f"chegar em {_fmt_num(dados.get('ib_nec'))} I/B. Use BT/BP e conversão da Ação de Fluxo (brinde → compra paga).",
-        "Preço Médio":      f"atingir {_fmt_moeda(dados.get('pm_nec'))} de PM. Mix premium e sazonalidade de {mes_nome}.",
-        "Boletos":          f"alcançar {_fmt_num(dados.get('bol_nec'), 0)} boletos. CRM, Loja Digital, conversão da Ação de Fluxo.",
-    }
-    n_acoes = 3 if len(secoes) == 1 else 2
-    max_words = 160 if len(secoes) == 1 else 260
-    n_kpis = 3
-
-    secoes_linhas = [
-        f"### Ação para {s}\n{n_acoes} ações práticas para {metas_por_secao[s]}"
-        for s in secoes
-    ]
-    secoes_prompt_str = "\n\n".join(secoes_linhas)
-
-    prompt_usuario = prompt_usuario.format(
-        foco=foco,
-        tipo_loja=tipo_loja,
-        mes_nome=mes_nome,
-        secoes_prompt=secoes_prompt_str,
-        n_kpis=n_kpis,
-        max_words=max_words,
-    )
 
     client = _get_client()
     response = client.chat.completions.create(
