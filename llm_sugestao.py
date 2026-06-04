@@ -333,7 +333,8 @@ def gerar_plano_inicial(dados: dict) -> str:
         11: "Black Friday (última semana) — maior mês em volume de boletos; priorize I/B e conversão",
         12: "Natal + Ano Novo — gifting e perfumaria premium; segundo maior mês do ano",
     }
-    mes_num = dados.get('mes_num') or dados.get('mes_selecionado', 0)
+    mes_num  = dados.get('mes_num') or dados.get('mes_selecionado', 0)
+    mes_nome = dados.get('mes_nome', '')
     sazonalidade = sazonalidade_map.get(int(mes_num), "")
 
     # ── Tendência: série + conclusões diagnósticas ────────────────────────────
@@ -393,19 +394,28 @@ def gerar_plano_inicial(dados: dict) -> str:
         if linhas_bench:
             insight_bench = f"Comparado com {n_lojas} lojas do tipo {cluster_nome}:\n" + "\n".join(linhas_bench)
 
-    # ── Contexto da equipe e desafio ──────────────────────────────────────────
-    equipe   = dados.get('tamanho_equipe', '?')
-    desafio  = dados.get('desafio_principal', 'Não informado')
     tipo_loja = dados.get('tipo_loja', 'Não informado')
 
+    foco_key = dados.get("foco", "combinado")
+
+    # Define quais seções de ação gerar conforme o foco
+    secoes_acao = {
+        "combinado": ["Boleto Médio", "Itens por Boleto", "Preço Médio", "Boletos"],
+        "bm":        ["Boleto Médio"],
+        "ib":        ["Itens por Boleto"],
+        "pm":        ["Preço Médio"],
+        "boletos":   ["Boletos"],
+    }
+    secoes = secoes_acao.get(foco_key, secoes_acao["combinado"])
+
     foco_map = {
-        "combinado": "alavancas mais factíveis baseadas nos dados reais",
+        "combinado": "todos os indicadores",
         "bm":        "Boleto Médio",
         "ib":        "Itens por Boleto",
         "pm":        "Preço Médio",
-        "boletos":   "aumento de Boletos",
+        "boletos":   "Boletos",
     }
-    foco = foco_map.get(dados.get("foco", "combinado"), "alavancas mais factíveis")
+    foco = foco_map.get(foco_key, "todos os indicadores")
 
     def _fact_txt(nec, mx):
         try:
@@ -436,35 +446,51 @@ def gerar_plano_inicial(dados: dict) -> str:
 
 Com base EXCLUSIVAMENTE nos dados acima, gere um plano focado em **{foco}**.
 
-**REGRAS OBRIGATÓRIAS:**
-- O Diagnóstico DEVE reproduzir a conclusão diagnóstica da tendência acima — é a frase mais importante do plano
-- Cada ação deve citar um número real (da série histórica ou da comparação com outras lojas)
-- Usar a sazonalidade de {dados.get('mes_nome','')} para priorizar categoria
-- PROIBIDO: mediana, percentil, benchmark, p50, top 25% — use "maioria das lojas", "lojas parecidas", "o esperado para este tipo de loja"
+**REGRAS:**
+- Diagnóstico: use as frases da conclusão da tendência com os números reais
+- Cada ação: cita o valor-alvo e um número da tendência ou comparação com lojas {tipo_loja}
+- Sazonalidade de {mes_nome}: mencione na ação mais relevante
+- PROIBIDO: mediana, percentil, p50, top 25% — use "maioria das lojas {tipo_loja}", "lojas parecidas"
 
-Use EXATAMENTE estes títulos markdown:
+Use EXATAMENTE estes títulos markdown (sem adicionar outros):
 
 ### Diagnóstico
-Escreva EXATAMENTE 2 frases — use os números da série histórica acima:
-- Frase 1: cite o padrão da tendência com os números reais (ex: "Seu I/B caiu de 2,4 para 2,0 nos últimos 3 meses — isso é problema de execução da equipe, não de meta")
-- Frase 2: compare com outras lojas {tipo_loja} em linguagem simples, com número (ex: "Lojas {tipo_loja} parecidas vendem em média R$ X a mais por boleto — há espaço de Y% para crescer")
+2 frases:
+- Frase 1: tendência com números reais (ex: "Seu I/B caiu 3 meses seguidos, de 2,4 para 2,0 — o problema não é meta, é processo")
+- Frase 2: comparação com lojas {tipo_loja} com número concreto
 
-### Ação para Boleto Médio
-2 ações para atingir {_fmt_moeda(dados.get('bm_nec'))} — calibradas para {equipe} consultores e cluster {tipo_loja}. Cite o indicador IAF impactado pelo nome.
-
-### Ação para Itens por Boleto
-2 ações para chegar em {_fmt_num(dados.get('ib_nec'))} I/B — use BT/BP e Conversão da Ação de Fluxo (converter resgate de brinde em compra paga).
-
-### Ação para Preço Médio
-2 ações para atingir {_fmt_moeda(dados.get('pm_nec'))} de PM — conecte à sazonalidade de {dados.get('mes_nome','')} e ao cluster {tipo_loja}.
-
-### Ação para Boletos
-2 ações para alcançar {_fmt_num(dados.get('bol_nec'),0)} boletos — considere o desafio "{desafio}" e CRM/Loja Digital.
+{secoes_prompt}
 
 ### O que monitorar
-3 KPIs diários com frequência definida, relevantes para {equipe} consultores.
+{n_kpis} KPIs diários — focados em {foco}. Formato: "indicador — frequência".
 
-Máximo 220 palavras. Sem introdução. Sem conclusão. Cada ação deve ter UM verbo de ação claro."""
+Máximo {max_words} palavras. Sem introdução. Sem conclusão. Cada ação começa com um verbo."""
+
+    # ── Monta seções de ação conforme o foco ─────────────────────────────────
+    metas_por_secao = {
+        "Boleto Médio":     f"atingir {_fmt_moeda(dados.get('bm_nec'))} de BM. Use BT/BP e mix premium. Cite o indicador IAF impactado pelo nome.",
+        "Itens por Boleto": f"chegar em {_fmt_num(dados.get('ib_nec'))} I/B. Use BT/BP e conversão da Ação de Fluxo (brinde → compra paga).",
+        "Preço Médio":      f"atingir {_fmt_moeda(dados.get('pm_nec'))} de PM. Mix premium e sazonalidade de {mes_nome}.",
+        "Boletos":          f"alcançar {_fmt_num(dados.get('bol_nec'), 0)} boletos. CRM, Loja Digital, conversão da Ação de Fluxo.",
+    }
+    n_acoes = 3 if len(secoes) == 1 else 2
+    max_words = 160 if len(secoes) == 1 else 260
+    n_kpis = 3
+
+    secoes_linhas = [
+        f"### Ação para {s}\n{n_acoes} ações práticas para {metas_por_secao[s]}"
+        for s in secoes
+    ]
+    secoes_prompt_str = "\n\n".join(secoes_linhas)
+
+    prompt_usuario = prompt_usuario.format(
+        foco=foco,
+        tipo_loja=tipo_loja,
+        mes_nome=mes_nome,
+        secoes_prompt=secoes_prompt_str,
+        n_kpis=n_kpis,
+        max_words=max_words,
+    )
 
     client = _get_client()
     response = client.chat.completions.create(
