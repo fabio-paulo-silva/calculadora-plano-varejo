@@ -344,7 +344,7 @@ def _get_client() -> tuple:
         except ImportError as exc:
             raise ImportError("Pacote 'groq' não instalado. Adicione 'groq' ao requirements.txt.") from exc
         from groq import Groq  # type: ignore
-        return Groq(api_key=groq_key), "llama-3.3-70b-versatile"
+        return Groq(api_key=groq_key), "llama-3.1-8b-instant"
 
     raise ValueError(
         "Nenhuma chave de API configurada. "
