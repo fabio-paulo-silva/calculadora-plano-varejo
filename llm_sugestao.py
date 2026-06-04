@@ -180,10 +180,80 @@ def _get_client():
 # ── Geração do plano inicial ──────────────────────────────────────────────────
 
 def gerar_plano_inicial(dados: dict) -> str:
-    """Gera o plano de ação inicial personalizado e enxuto para a loja."""
+    """Gera o plano de ação inicial — usa tendência, benchmark, cluster, equipe e desafio."""
+
+    # ── Sazonalidade do mês ────────────────────────────────────────────────────
+    sazonalidade_map = {
+        1:  "pós-festas — reativação de clientes, liquidação de estoque",
+        2:  "Carnaval — perfumaria feminina, maquiagem para festas",
+        3:  "Dia da Mulher (8/3) — gifting premium, kits de skincare",
+        4:  "Páscoa — gifting, kits de presente, alto tráfego em shopping",
+        5:  "Dia das Mães — maior data do varejo de cosméticos; gifting e perfumaria são prioridade",
+        6:  "Dia dos Namorados (12/6) — perfumaria masculina e feminina, kits casal; BM historicamente alto",
+        7:  "Férias escolares — queda de tráfego em alguns formatos; foco em fidelização e serviços",
+        8:  "Dia dos Pais (2ª semana) — perfumaria masculina, kits presente",
+        9:  "lançamentos coleção — boa janela para skincare e novas categorias",
+        10: "Dia das Crianças (12/10) — gifting, alto tráfego em shopping",
+        11: "Black Friday (última semana) — maior mês em volume de boletos; priorize I/B e conversão",
+        12: "Natal + Ano Novo — gifting e perfumaria premium; segundo maior mês do ano",
+    }
+    mes_num = dados.get('mes_num') or dados.get('mes_selecionado', 0)
+    sazonalidade = sazonalidade_map.get(int(mes_num), "")
+
+    # ── Tendência: extrai insights reais por indicador ─────────────────────────
+    tendencia = dados.get('tendencia', [])
+    insight_tendencia = "Sem histórico de meses anteriores disponível."
+    if len(tendencia) >= 2:
+        linhas = []
+        for ind, chave in [("BM", "BM"), ("I/B", "I/B"), ("PM", "PM"), ("Boletos", "BOLETOS")]:
+            vals = [m.get(chave) for m in tendencia if m.get(chave) is not None]
+            if len(vals) >= 2:
+                delta = vals[-1] - vals[0]
+                pct   = delta / vals[0] if vals[0] else 0
+                dir_  = "↑ subindo" if delta > 0 else "↓ caindo"
+                meses = [NOMES_MESES.get(m.get('MES', 0), '')[:3] for m in tendencia if m.get(chave) is not None]
+                serie = " → ".join(
+                    (_fmt_moeda(v) if ind in ("BM", "PM") else _fmt_num(v, 0 if ind == "Boletos" else 1))
+                    for v in vals
+                )
+                linhas.append(f"- **{ind}:** {serie} ({dir_} {_fmt_pct(pct)}) [{', '.join(meses)}]")
+        if linhas:
+            insight_tendencia = "\n".join(linhas)
+
+    # ── Benchmark: posição vs cluster ─────────────────────────────────────────
+    b = dados.get('benchmark', {})
+    cluster_nome = b.get('cluster_nome', 'Geral')
+    n_lojas      = b.get('n_lojas', 0)
+    insight_bench = "Benchmark não disponível."
+    if n_lojas > 0:
+        linhas_bench = []
+        for ind, chave_loja, chave_p50, chave_p75 in [
+            ("BM",      'bm_ref',  'p50_bm',  'p75_bm'),
+            ("I/B",     'ib_ref',  'p50_ib',  'p75_ib'),
+            ("PM",      'pm_ref',  'p50_pm',  'p75_pm'),
+            ("Boletos", 'bol_ref', 'p50_bol', 'p75_bol'),
+        ]:
+            try:
+                val  = float(dados.get(chave_loja))
+                p50  = float(b.get(chave_p50))
+                p75  = float(b.get(chave_p75))
+                pos  = "🟢 Top 25%" if val >= p75 else ("🟡 Acima da mediana" if val >= p50 else "🔴 Abaixo da mediana")
+                fmt  = _fmt_moeda if ind in ("BM", "PM") else lambda v, _=0: _fmt_num(v, 0 if ind == "Boletos" else 1)
+                linhas_bench.append(
+                    f"- **{ind}:** esta loja {fmt(val)} | mediana {fmt(p50)} | top25% {fmt(p75)} → {pos}"
+                )
+            except Exception:
+                pass
+        if linhas_bench:
+            insight_bench = f"Cluster **{cluster_nome}** ({n_lojas} lojas):\n" + "\n".join(linhas_bench)
+
+    # ── Contexto da equipe e desafio ──────────────────────────────────────────
+    equipe   = dados.get('tamanho_equipe', '?')
+    desafio  = dados.get('desafio_principal', 'Não informado')
+    tipo_loja = dados.get('tipo_loja', 'Não informado')
 
     foco_map = {
-        "combinado": "alavancas mais factíveis para esta loja",
+        "combinado": "alavancas mais factíveis baseadas nos dados reais",
         "bm":        "Boleto Médio",
         "ib":        "Itens por Boleto",
         "pm":        "Preço Médio",
@@ -191,77 +261,62 @@ def gerar_plano_inicial(dados: dict) -> str:
     }
     foco = foco_map.get(dados.get("foco", "combinado"), "alavancas mais factíveis")
 
-    # Monta bloco de metas específicas da loja para o prompt
     def _fact_txt(nec, mx):
         try:
             return "✅ já atingido antes" if float(nec) <= float(mx) else f"🔴 {(float(nec)/float(mx)-1)*100:.0f}% acima do histórico"
         except Exception:
             return ""
 
-    metas_loja = f"""**Metas específicas desta loja para {dados.get('mes_nome','')}/{dados.get('bcps','')}:**
-- Boleto Médio necessário: **{_fmt_moeda(dados.get('bm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('bm_ref'))}, var. {_fmt_pct(dados.get('var_bm'))}) — {_fact_txt(dados.get('bm_nec'), dados.get('max_bm'))}
-- Itens por Boleto necessário: **{_fmt_num(dados.get('ib_nec'))}** (ref. 2025: {_fmt_num(dados.get('ib_ref'))}, var. {_fmt_pct(dados.get('var_ib'))}) — {_fact_txt(dados.get('ib_nec'), dados.get('max_ib'))}
-- Preço Médio necessário: **{_fmt_moeda(dados.get('pm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('pm_ref'))}, var. {_fmt_pct(dados.get('var_pm'))}) — {_fact_txt(dados.get('pm_nec'), dados.get('max_pm'))}
+    prompt_usuario = f"""## CONTEXTO DESTA LOJA
+
+**Loja:** {dados.get('loja_nome','—')} | **Cluster:** {tipo_loja} | **Mês:** {dados.get('mes_nome','')} 2026
+**Equipe:** {equipe} consultores | **Principal desafio declarado:** {desafio}
+**Sazonalidade de {dados.get('mes_nome','')}:** {sazonalidade}
+
+## METAS DO MÊS
+- Meta: **{_fmt_moeda(dados.get('meta'))}**
+- BM necessário: **{_fmt_moeda(dados.get('bm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('bm_ref'))}, var. {_fmt_pct(dados.get('var_bm'))}) — {_fact_txt(dados.get('bm_nec'), dados.get('max_bm'))}
+- I/B necessário: **{_fmt_num(dados.get('ib_nec'))}** (ref. 2025: {_fmt_num(dados.get('ib_ref'))}, var. {_fmt_pct(dados.get('var_ib'))}) — {_fact_txt(dados.get('ib_nec'), dados.get('max_ib'))}
+- PM necessário: **{_fmt_moeda(dados.get('pm_nec'))}** (ref. 2025: {_fmt_moeda(dados.get('pm_ref'))}, var. {_fmt_pct(dados.get('var_pm'))}) — {_fact_txt(dados.get('pm_nec'), dados.get('max_pm'))}
 - Boletos necessários: **{_fmt_num(dados.get('bol_nec'),0)}** (ref. 2025: {_fmt_num(dados.get('bol_ref'),0)}, var. {_fmt_pct(dados.get('var_bol'))}) — {_fact_txt(dados.get('bol_nec'), dados.get('max_bol'))}
-- Meta do mês: **{_fmt_moeda(dados.get('meta'))}**"""
 
-    # Deriva insight de tendência para o prompt
-    tendencia = dados.get('tendencia', [])
-    insight_tendencia = ""
-    if len(tendencia) >= 2:
-        bm_vals = [m.get('BM') for m in tendencia if m.get('BM')]
-        ib_vals = [m.get('I/B') for m in tendencia if m.get('I/B')]
-        if len(bm_vals) >= 2:
-            delta_bm = bm_vals[-1] - bm_vals[0]
-            tendencia_txt = "em alta" if delta_bm > 0 else "em queda"
-            insight_tendencia = f"Tendência de BM nos últimos meses: **{tendencia_txt}** ({_fmt_pct(delta_bm / bm_vals[0] if bm_vals[0] else 0)})."
-
-    # Deriva insight de benchmark
-    b = dados.get('benchmark', {})
-    insight_bench = ""
-    if b.get('n_lojas', 0) > 0:
-        loja_bm = dados.get('bm_ref')
-        p50_bm  = b.get('p50_bm')
-        p75_bm  = b.get('p75_bm')
-        try:
-            if float(loja_bm) >= float(p75_bm):
-                insight_bench = f"BM acima do Top 25% do cluster ({b.get('cluster_nome','')}) — oportunidade está em I/B ou boletos."
-            elif float(loja_bm) < float(p50_bm):
-                insight_bench = f"BM abaixo da mediana do cluster ({b.get('cluster_nome','')}) — há espaço real de captura via mix e BT/BP."
-            else:
-                insight_bench = f"BM entre mediana e Top 25% do cluster ({b.get('cluster_nome','')}) — potencial de subir uma faixa com foco em PM."
-        except Exception:
-            pass
-
-    prompt_usuario = f"""{metas_loja}
-
+## TENDÊNCIA DOS ÚLTIMOS MESES (2026)
 {insight_tendencia}
+
+## BENCHMARK VS CLUSTER {cluster_nome.upper()}
 {insight_bench}
 
-Gere um plano PERSONALIZADO para esta loja de **{dados.get('tipo_loja','varejo')}**, focado em **{foco}**.
-Considere: tipo de loja, sazonalidade do mês, tendência recente e posição no benchmark do cluster.
+---
+
+Com base EXCLUSIVAMENTE nos dados acima, gere um plano focado em **{foco}**.
+
+**OBRIGATÓRIO em cada seção:**
+- Citar o número real da tendência (ex: "I/B caiu de 2,3 para 1,9 nos últimos 3 meses")
+- Citar a posição no benchmark (ex: "BM abaixo da mediana do cluster {cluster_nome}")
+- Calibrar a ação ao tamanho da equipe ({equipe} consultores) e ao desafio "{desafio}"
+- Usar a sazonalidade de {dados.get('mes_nome','')} para priorizar categoria ou ação
 
 Use EXATAMENTE estes títulos markdown:
 
 ### Diagnóstico
-1 frase precisa: qual indicador é o gargalo real, baseado na tendência e no benchmark.
+1 frase: gargalo real com número da tendência + posição no benchmark.
 
 ### Ação para Boleto Médio
-2 ações específicas para esta loja atingir {_fmt_moeda(dados.get('bm_nec'))}. Conecte ao IAF pelo nome.
+2 ações para atingir {_fmt_moeda(dados.get('bm_nec'))} — calibradas para {equipe} consultores e cluster {tipo_loja}. Cite o indicador IAF impactado pelo nome.
 
 ### Ação para Itens por Boleto
-2 ações para chegar em {_fmt_num(dados.get('ib_nec'))} I/B. Use BT/BP se pertinente ao cluster.
+2 ações para chegar em {_fmt_num(dados.get('ib_nec'))} I/B — use BT/BP e Conversão da Ação de Fluxo (converter resgate de brinde em compra paga).
 
 ### Ação para Preço Médio
-2 ações para atingir {_fmt_moeda(dados.get('pm_nec'))} de PM. Adeque ao perfil {dados.get('tipo_loja','da loja')}.
+2 ações para atingir {_fmt_moeda(dados.get('pm_nec'))} de PM — conecte à sazonalidade de {dados.get('mes_nome','')} e ao cluster {tipo_loja}.
 
 ### Ação para Boletos
-2 ações para alcançar {_fmt_num(dados.get('bol_nec'),0)} boletos. CRM, Loja Digital, Ação de Fluxo.
+2 ações para alcançar {_fmt_num(dados.get('bol_nec'),0)} boletos — considere o desafio "{desafio}" e CRM/Loja Digital.
 
 ### O que monitorar
-3 KPIs com frequência (ex: "BM diário por consultora").
+3 KPIs diários com frequência definida, relevantes para {equipe} consultores.
 
-Máximo 200 palavras. Sem introdução. Sem conclusão. Direto ao ponto."""
+Máximo 220 palavras. Sem introdução. Sem conclusão. Cada ação deve ter UM verbo de ação claro."""
 
     client = _get_client()
     response = client.chat.completions.create(
@@ -270,8 +325,8 @@ Máximo 200 palavras. Sem introdução. Sem conclusão. Direto ao ponto."""
             {"role": "system", "content": _system_prompt(dados)},
             {"role": "user",   "content": prompt_usuario},
         ],
-        temperature=0.25,
-        max_tokens=700,
+        temperature=0.2,
+        max_tokens=800,
     )
     return response.choices[0].message.content.strip()
 
