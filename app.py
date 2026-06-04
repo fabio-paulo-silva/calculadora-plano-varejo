@@ -3,6 +3,7 @@ import datetime
 import pandas as pd
 import streamlit as st
 
+from llm_sugestao import gerar_sugestao_llm
 from plano_acao import carregar_historico, gerar_pdf, salvar_historico
 from transform_data import carregar_tudo
 
@@ -213,13 +214,17 @@ def gerar_sugestao(row, hist_max_row):
 
 st.title("🎯 Calculadora de Indicadores Comerciais")
 
-# Inicializa session_state para persistir o PDF entre reruns
+# Inicializa session_state para persistir o PDF e o plano LLM entre reruns
 if "pdf_bytes" not in st.session_state:
     st.session_state["pdf_bytes"] = None
 if "pdf_nome" not in st.session_state:
     st.session_state["pdf_nome"] = None
 if "pdf_chave" not in st.session_state:
     st.session_state["pdf_chave"] = None   # identifica loja+mês do PDF gerado
+if "llm_plano" not in st.session_state:
+    st.session_state["llm_plano"] = None   # texto do plano gerado pelo LLM
+if "llm_chave" not in st.session_state:
+    st.session_state["llm_chave"] = None   # invalida ao trocar loja/mês
 
 try:
     analise, hist_max, metas, base, dcentros = load_data()
@@ -497,6 +502,122 @@ elif tipo == "info":
     st.info(mensagem)
 else:
     st.warning(mensagem)
+
+# ── Botão de geração de plano com IA ─────────────────────────────────────────
+
+st.markdown("---")
+st.markdown("##### ✨ Plano de Ação com Inteligência Artificial")
+st.caption(
+    "Gera um plano detalhado baseado nos seus dados reais + base de conhecimento IAF 2026 "
+    "(Groq · LLaMA 3.3 70B). Gratuito."
+)
+
+# Limpa plano LLM ao trocar loja ou mês
+llm_chave_atual = f"{bcps_selecionado}_{mes_selecionado}"
+if st.session_state.get("llm_chave") != llm_chave_atual:
+    st.session_state["llm_plano"] = None
+
+# Opção de foco
+foco_opcoes = {
+    "combinado":  "🎯 Plano combinado (todas as alavancas)",
+    "bm":         "📊 Foco em Boleto Médio",
+    "ib":         "📦 Foco em Itens por Boleto",
+    "pm":         "💰 Foco em Preço Médio",
+    "boletos":    "🚀 Foco em Boletos (fluxo de clientes)",
+}
+foco_sel = st.selectbox(
+    "Foco do plano",
+    options=list(foco_opcoes.keys()),
+    format_func=lambda k: foco_opcoes[k],
+    key="llm_foco",
+)
+
+col_llm1, col_llm2 = st.columns([1, 3])
+with col_llm1:
+    gerar_llm = st.button("✨ Gerar Plano com IA", use_container_width=True, type="primary")
+
+if gerar_llm:
+    loja_info_llm = dcentros[dcentros['BCPS'] == int(bcps_selecionado)]
+    li_llm = loja_info_llm.iloc[0] if not loja_info_llm.empty else {}
+
+    dados_llm = {
+        "loja_nome": loja_map.get(int(bcps_selecionado), f"Loja {int(bcps_selecionado)}"),
+        "bcps":      int(bcps_selecionado),
+        "mes_nome":  NOMES_MESES.get(mes_selecionado, str(mes_selecionado)),
+        "regional":  li_llm.get("GRVO", "—") if hasattr(li_llm, "get") else "—",
+        "praca":     li_llm.get("PRACA", "—") if hasattr(li_llm, "get") else "—",
+        # Metas e projeções
+        "meta":      meta,
+        "bol_proj":  bol_proj,
+        # Necessários
+        "bm_nec":    bm_nec,
+        "ib_nec":    ib_nec,
+        "pm_nec":    pm_nec,
+        "bol_nec":   bol_nec,
+        # Referência 2025
+        "bm_ref":    bm_ref,
+        "ib_ref":    ib_ref,
+        "pm_ref":    pm_ref,
+        "bol_ref":   bol_ref,
+        # Máximos históricos
+        "max_bm":    max_bm,
+        "max_ib":    max_ib,
+        "max_pm":    max_pm,
+        "max_bol":   max_bol,
+        # Variações necessárias
+        "var_bm":    _safe(row.get("VAR_BM")),
+        "var_ib":    _safe(row.get("VAR_IB")),
+        "var_pm":    _safe(row.get("VAR_PM")),
+        "var_bol":   _safe(row.get("VAR_BOL")),
+        # Diagnóstico determinístico como base
+        "sugestao_deterministica": mensagem,
+        "foco": foco_sel,
+    }
+
+    with st.spinner("Gerando plano de ação com IA... (alguns segundos)"):
+        try:
+            plano_gerado = gerar_sugestao_llm(dados_llm)
+            st.session_state["llm_plano"] = plano_gerado
+            st.session_state["llm_chave"] = llm_chave_atual
+        except ValueError as e:
+            st.error(f"⚠️ Chave de API não configurada: {e}")
+        except ImportError as e:
+            st.error(f"⚠️ {e}")
+        except Exception as e:
+            st.error(f"❌ Erro ao chamar a IA: {e}")
+
+# Exibe o plano gerado (persiste entre reruns)
+if st.session_state.get("llm_plano"):
+    with st.container(border=True):
+        st.markdown(st.session_state["llm_plano"])
+
+    # Botão para pré-preencher os campos do Plano de Ação
+    if st.button("📋 Usar este plano nos campos abaixo", key="usar_plano_llm"):
+        plano_txt = st.session_state["llm_plano"]
+
+        def _extrair_secao(texto: str, titulo: str) -> str:
+            """Extrai o conteúdo de uma seção markdown pelo título."""
+            import re
+            pattern = rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)"
+            m = re.search(pattern, texto, re.DOTALL | re.IGNORECASE)
+            return m.group(1).strip() if m else ""
+
+        bm_ia  = _extrair_secao(plano_txt, "Ação para Boleto Médio (BM)")
+        ib_ia  = _extrair_secao(plano_txt, "Ação para Itens por Boleto (I/B)")
+        pm_ia  = _extrair_secao(plano_txt, "Ação para Preço Médio (PM)")
+        bol_ia = _extrair_secao(plano_txt, "Ação para Boletos (captação de clientes)")
+
+        if bm_ia:
+            st.session_state["acao_bm"]      = bm_ia
+        if ib_ia:
+            st.session_state["acao_ib"]      = ib_ia
+        if pm_ia:
+            st.session_state["acao_pm"]      = pm_ia
+        if bol_ia:
+            st.session_state["acao_boletos"] = bol_ia
+
+        st.success("Campos do Plano de Ação preenchidos com o plano da IA! Revise e ajuste antes de salvar.")
+        st.rerun()
 
 # Tabela comparativa com máximos históricos
 if hist_row is not None:

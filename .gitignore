@@ -3,3 +3,4 @@ __pycache__/
 *.pyc
 historico_planos.xlsx
 .env
+.streamlit/secrets.toml
