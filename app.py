@@ -531,9 +531,6 @@ _snap = {
     # Contexto calculado
     "tendencia": tendencia_loja(analise, int(bcps_selecionado), mes_selecionado),
     "benchmark": benchmark_cluster(analise, mes_selecionado, dcentros, int(bcps_selecionado)),
-    # Contexto declarado pelo gestor
-    "tamanho_equipe":    st.session_state.get("ctx_equipe", "?"),
-    "desafio_principal": st.session_state.get("ctx_desafio", "Não informado"),
 }
 st.session_state["_snap"] = _snap   # disponível dentro do fragment
 
@@ -547,21 +544,6 @@ def secao_ia():
     st.markdown("---")
     st.markdown("##### ✨ Plano de Ação com IA")
     st.caption("Groq · LLaMA 3.3 70B · IAF 2026 — personalizado para esta loja")
-
-    # ── Contexto da loja ──────────────────────────────────────────────────────
-    with st.expander("⚙️ Contexto da loja — preencha para um plano mais preciso", expanded=False):
-        ctx_col1, ctx_col2 = st.columns(2)
-        with ctx_col1:
-            st.number_input("Nº de consultores", min_value=1, max_value=50,
-                value=int(st.session_state.get("ctx_equipe") or 3),
-                step=1, key="ctx_equipe")
-        with ctx_col2:
-            st.selectbox("Principal desafio atual", [
-                "Não informado", "Fluxo de clientes baixo",
-                "Equipe nova / em treinamento", "Mix de produtos inadequado",
-                "Concorrência forte na praça", "Ticket médio abaixo do esperado",
-                "Alta rotatividade de equipe", "Outro",
-            ], key="ctx_desafio")
 
     # ── Foco + botão ──────────────────────────────────────────────────────────
     foco_opcoes = {
@@ -581,10 +563,8 @@ def secao_ia():
 
     if gerar_llm:
         dados_llm = {
-            **snap,                          # tipo_loja já vem do _snap (coluna CLUSTER)
-            "foco":              st.session_state.get("llm_foco", "combinado"),
-            "tamanho_equipe":    st.session_state.get("ctx_equipe", "?"),
-            "desafio_principal": st.session_state.get("ctx_desafio", "Não informado"),
+            **snap,
+            "foco": st.session_state.get("llm_foco", "combinado"),
         }
         with st.spinner("Gerando plano personalizado..."):
             try:
@@ -601,28 +581,37 @@ def secao_ia():
         return
 
     plano_txt = st.session_state["llm_plano"]
+    # Escapa R$ para não virar LaTeX no markdown do Streamlit
+    plano_md  = plano_txt.replace("R$", "R\\$")
 
     with st.expander("📄 Ver / ocultar plano gerado", expanded=gerar_llm):
-        st.markdown(plano_txt)
+        st.markdown(plano_md)
 
         col_usar, _ = st.columns([2, 3])
         with col_usar:
             if st.button("📋 Usar nos campos do Plano de Ação", key="usar_plano_llm"):
                 def _ext(titulo):
+                    # Regex flexível: aceita texto extra após o título (ex: "(BM)", "—", etc.)
                     m = re.search(
-                        rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)",
+                        rf"###\s*{re.escape(titulo)}[^\n]*\n(.*?)(?=\n###|\Z)",
                         plano_txt, re.DOTALL | re.IGNORECASE)
                     return m.group(1).strip() if m else ""
 
+                preencheu = False
                 if bm_ia  := _ext("Ação para Boleto Médio"):
-                    st.session_state["acao_bm"]      = bm_ia
+                    st.session_state["acao_bm"]      = bm_ia; preencheu = True
                 if ib_ia  := _ext("Ação para Itens por Boleto"):
-                    st.session_state["acao_ib"]      = ib_ia
+                    st.session_state["acao_ib"]      = ib_ia; preencheu = True
                 if pm_ia  := _ext("Ação para Preço Médio"):
-                    st.session_state["acao_pm"]      = pm_ia
+                    st.session_state["acao_pm"]      = pm_ia; preencheu = True
                 if bol_ia := _ext("Ação para Boletos"):
-                    st.session_state["acao_boletos"] = bol_ia
-                st.success("Campos preenchidos! Revise abaixo antes de salvar.")
+                    st.session_state["acao_boletos"] = bol_ia; preencheu = True
+
+                if preencheu:
+                    # Rerun completo para os text_area externos ao fragment atualizarem
+                    st.rerun(scope="app")
+                else:
+                    st.warning("Não foi possível extrair as seções do plano. Tente gerar novamente.")
 
 
 secao_ia()
