@@ -199,18 +199,23 @@ def historico_max_por_bcps(base: pd.DataFrame) -> pd.DataFrame:
 
 
 def preparar_dcentros(dcentros: pd.DataFrame) -> pd.DataFrame:
-    col_praca = next((c for c in dcentros.columns if 'PRA' in c.upper()), None)
-    col_gcvo  = next((c for c in dcentros.columns if 'GCVO' in c.upper()), None)
+    col_praca   = next((c for c in dcentros.columns if 'PRA' in c.upper()), None)
+    col_gcvo    = next((c for c in dcentros.columns if 'GCVO' in c.upper()), None)
+    col_cluster = next((c for c in dcentros.columns if 'CLUSTER' in c.upper()), None)
 
     colunas_map = {'BCPS': 'BCPS', 'LOJA': 'LOJA', 'GVO': 'GVO', 'GRVO': 'GRVO'}
     if col_praca:
         colunas_map[col_praca] = 'PRACA'
     if col_gcvo:
         colunas_map[col_gcvo] = 'GCVO'
+    if col_cluster:
+        colunas_map[col_cluster] = 'CLUSTER'
 
     df = dcentros[[c for c in colunas_map if c in dcentros.columns]].copy()
     df = df.rename(columns=colunas_map)
     df['BCPS'] = pd.to_numeric(df['BCPS'], errors='coerce')
+    if 'CLUSTER' not in df.columns:
+        df['CLUSTER'] = None
     return df.dropna(subset=['BCPS']).drop_duplicates(subset=['BCPS'])
 
 
@@ -234,29 +239,31 @@ def tendencia_loja(analise: pd.DataFrame, bcps: int, mes_atual: int, n_meses: in
 def benchmark_cluster(
     analise: pd.DataFrame,
     mes: int,
-    clusters: pd.DataFrame,
+    dcentros: pd.DataFrame,
     bcps: int,
 ) -> dict:
     """
-    Calcula benchmarks (mediana e P75) de BM_2025, IB_2025, PM_2025 para o mês.
+    Calcula benchmarks (mediana e P75) para o mês, usando a coluna CLUSTER do dcentros.
 
-    - Se clusters tiver dados, filtra pelo mesmo CLUSTER do BCPS informado.
+    - Se CLUSTER disponível, filtra pelo cluster do BCPS informado.
     - Fallback: usa todas as lojas do mesmo mês (benchmark geral).
-
-    Retorna dict com: cluster_nome, n_lojas, p50/p75 para BM, IB, PM, BOL.
     """
     cluster_nome = "Geral"
     df_bench = analise[analise['MES'] == mes].drop_duplicates(subset=['BCPS'])
 
-    if not clusters.empty and bcps in clusters['BCPS'].values:
-        cluster_nome = clusters.loc[clusters['BCPS'] == bcps, 'CLUSTER'].iloc[0]
-        bcps_cluster = clusters.loc[clusters['CLUSTER'] == cluster_nome, 'BCPS'].tolist()
-        df_filtrado  = df_bench[df_bench['BCPS'].isin(bcps_cluster)]
-        if len(df_filtrado) >= 3:          # mínimo para benchmark ter sentido
-            df_bench = df_filtrado
+    if 'CLUSTER' in dcentros.columns:
+        loja_row = dcentros[dcentros['BCPS'] == bcps]
+        if not loja_row.empty and pd.notna(loja_row.iloc[0].get('CLUSTER')):
+            cluster_nome = str(loja_row.iloc[0]['CLUSTER']).strip()
+            bcps_cluster = dcentros.loc[
+                dcentros['CLUSTER'].astype(str).str.strip() == cluster_nome, 'BCPS'
+            ].tolist()
+            df_filtrado = df_bench[df_bench['BCPS'].isin(bcps_cluster)]
+            if len(df_filtrado) >= 3:
+                df_bench = df_filtrado
 
     cols_ref = ['BM_2025', 'IB_2025', 'PM_2025', 'BOL_2025']
-    df_bench = df_bench[cols_ref].dropna()
+    df_bench = df_bench[[c for c in cols_ref if c in df_bench.columns]].dropna()
 
     if df_bench.empty:
         return {"cluster_nome": cluster_nome, "n_lojas": 0}
@@ -276,17 +283,17 @@ def benchmark_cluster(
 
 
 def carregar_tudo():
-    metas_raw, raw_data, dcentros_raw, clusters = load_data_url()
+    metas_raw, raw_data, dcentros_raw = load_data_url()
     metas     = tratar_metas(metas_raw)
     df_varejo = tratar_dados_varejo(raw_data)
     base      = agrupar_mensal(df_varejo)
     base      = calcular_indicadores(base)
     analise   = construir_analise(base, metas)
     hist_max  = historico_max_por_bcps(base)
-    dcentros  = preparar_dcentros(dcentros_raw)
+    dcentros  = preparar_dcentros(dcentros_raw)   # já inclui coluna CLUSTER
 
-    analise = analise.merge(
-        dcentros[['BCPS', 'LOJA', 'PRACA', 'GVO', 'GCVO', 'GRVO']],
-        on='BCPS', how='left'
-    )
-    return analise, hist_max, metas, base, dcentros, clusters
+    cols_merge = [c for c in ['BCPS', 'LOJA', 'PRACA', 'GVO', 'GCVO', 'GRVO', 'CLUSTER']
+                  if c in dcentros.columns]
+    analise = analise.merge(dcentros[cols_merge], on='BCPS', how='left')
+
+    return analise, hist_max, metas, base, dcentros

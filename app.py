@@ -232,7 +232,7 @@ if "llm_dados" not in st.session_state:
     st.session_state["llm_dados"] = {}     # dados da loja usados no chat
 
 try:
-    analise, hist_max, metas, base, dcentros, clusters = load_data()
+    analise, hist_max, metas, base, dcentros = load_data()
 except Exception as e:
     st.error(f"Erro ao carregar dados: {e}")
     st.stop()
@@ -534,7 +534,7 @@ _snap = {
     "llm_chave": _llm_chave_atual,
     # Contexto calculado
     "tendencia": tendencia_loja(analise, int(bcps_selecionado), mes_selecionado),
-    "benchmark": benchmark_cluster(analise, mes_selecionado, clusters, int(bcps_selecionado)),
+    "benchmark": benchmark_cluster(analise, mes_selecionado, dcentros, int(bcps_selecionado)),
     # Contexto declarado pelo gestor (inicializa com defaults; atualizado no fragment)
     "tipo_loja":       st.session_state.get("ctx_tipo_loja", "Não informado"),
     "tamanho_equipe":  st.session_state.get("ctx_equipe", "?"),
