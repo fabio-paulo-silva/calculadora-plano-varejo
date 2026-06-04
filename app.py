@@ -525,12 +525,14 @@ _snap = {
     "var_bm":    _safe(row.get("VAR_BM")), "var_ib": _safe(row.get("VAR_IB")),
     "var_pm":    _safe(row.get("VAR_PM")), "var_bol": _safe(row.get("VAR_BOL")),
     "llm_chave": _llm_chave_atual,
+    # Cluster vem direto do dcentros (coluna CLUSTER)
+    "tipo_loja": str(_loja_dc.iloc[0].get("CLUSTER", "Não informado")).strip()
+                 if not _loja_dc.empty else "Não informado",
     # Contexto calculado
     "tendencia": tendencia_loja(analise, int(bcps_selecionado), mes_selecionado),
     "benchmark": benchmark_cluster(analise, mes_selecionado, dcentros, int(bcps_selecionado)),
-    # Contexto declarado pelo gestor (inicializa com defaults; atualizado no fragment)
-    "tipo_loja":       st.session_state.get("ctx_tipo_loja", "Não informado"),
-    "tamanho_equipe":  st.session_state.get("ctx_equipe", "?"),
+    # Contexto declarado pelo gestor
+    "tamanho_equipe":    st.session_state.get("ctx_equipe", "?"),
     "desafio_principal": st.session_state.get("ctx_desafio", "Não informado"),
 }
 st.session_state["_snap"] = _snap   # disponível dentro do fragment
@@ -548,16 +550,12 @@ def secao_ia():
 
     # ── Contexto da loja ──────────────────────────────────────────────────────
     with st.expander("⚙️ Contexto da loja — preencha para um plano mais preciso", expanded=False):
-        ctx_col1, ctx_col2, ctx_col3 = st.columns(3)
+        ctx_col1, ctx_col2 = st.columns(2)
         with ctx_col1:
-            st.selectbox("Tipo de loja",
-                ["Não informado", "Shopping", "Rua", "Outlet", "Quiosque", "Aeroporto"],
-                key="ctx_tipo_loja")
-        with ctx_col2:
             st.number_input("Nº de consultores", min_value=1, max_value=50,
                 value=int(st.session_state.get("ctx_equipe") or 3),
                 step=1, key="ctx_equipe")
-        with ctx_col3:
+        with ctx_col2:
             st.selectbox("Principal desafio atual", [
                 "Não informado", "Fluxo de clientes baixo",
                 "Equipe nova / em treinamento", "Mix de produtos inadequado",
@@ -583,9 +581,8 @@ def secao_ia():
 
     if gerar_llm:
         dados_llm = {
-            **snap,
+            **snap,                          # tipo_loja já vem do _snap (coluna CLUSTER)
             "foco":              st.session_state.get("llm_foco", "combinado"),
-            "tipo_loja":         st.session_state.get("ctx_tipo_loja", "Não informado"),
             "tamanho_equipe":    st.session_state.get("ctx_equipe", "?"),
             "desafio_principal": st.session_state.get("ctx_desafio", "Não informado"),
         }

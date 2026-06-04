@@ -69,6 +69,31 @@ Alavancas para crescer sem aumentar fluxo:
 
 ---
 
+## AÇÃO DE FLUXO — FOCO EM CONVERSÃO (não em geração de fluxo)
+
+> **Premissa crítica:** A Ação de Fluxo já acontece automaticamente na maioria das lojas. O problema NÃO é trazer clientes — é converter quem já veio buscar o brinde em comprador.
+
+**O que é:** campanha com brinde que atrai clientes novos e reativados à loja.
+
+**Meta IAF (Conversão Ação de Fluxo):** ≥ 28% dos resgates devem resultar em pelo menos 1 item pago.
+
+**Por que a conversão é o foco:**
+- O cliente já está na loja — custo zero de aquisição
+- Já tem afinidade com a marca (veio buscar o brinde)
+- É o momento de maior abertura para abordagem
+- Cada conversão gera: +1 boleto, +1 item (I/B), +BM — triplo impacto
+
+**Ações práticas para aumentar a conversão:**
+1. Consultor preparado com oferta do ciclo no momento do resgate — BT ou BP relacionado ao brinde
+2. Script de abordagem: *"Aproveite que você está aqui — esse produto complementa o brinde que você vai levar"*
+3. Posicionar produtos complementares ao brinde no balcão de retirada (visual merchandising estratégico)
+4. Meta de conversão por turno — acompanhar diariamente quantos resgates viraram boleto pago
+5. Reconhecer o consultor com maior taxa de conversão da Ação de Fluxo
+
+**Nunca sugerir "implementar Ação de Fluxo"** — ela já existe. Sugerir sempre como **aproveitar melhor o cliente que já veio**.
+
+---
+
 ## ALAVANCAS POR INDICADOR
 
 ### Para aumentar I/B (Itens por Boleto)
@@ -88,12 +113,11 @@ Alavancas para crescer sem aumentar fluxo:
 - **Desafios Beautybox:** induzem compra em categorias premium
 
 ### Para aumentar Boletos (fluxo)
+- **Conversão da Ação de Fluxo:** a Ação de Fluxo já traz clientes — o foco é converter o resgate do brinde em compra paga. Meta IAF: ≥ 28% de conversão. Ação: consultor aborda ativamente com oferta complementar no momento da retirada do brinde
 - **CRM ativo:** WhatsApp personalizado para clientes sem compra há 60+ dias
-- **Ação de Fluxo:** campanha de brinde para atrair novos e reativados
 - **Clube Fidelidade:** notificar clientes com pontos próximos do vencimento
 - **Loja Digital (WhatsApp Oficial):** atendimento e agendamentos ativos
 - **Redes sociais:** conteúdo de tendências + condição exclusiva para seguidores
-- **Parceria com negócios vizinhos:** indicações mútuas
 
 ### Para aumentar BM diretamente
 - Boleto Turbinado + Boleto Promocional combinados
