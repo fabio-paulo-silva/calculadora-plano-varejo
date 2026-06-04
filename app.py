@@ -18,7 +18,8 @@ st.set_page_config(page_title="Calculadora de Metas", layout="wide", page_icon="
 
 @st.cache_data(ttl=3600, show_spinner="Carregando dados...")
 def load_data():
-    return carregar_tudo()   # retorna: analise, hist_max, metas, base, dcentros
+    # retorna: analise, hist_max, metas, base, dcentros, clusters
+    return carregar_tudo()
 
 
 def formatar_moeda(valor):
