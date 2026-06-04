@@ -425,9 +425,8 @@ def gerar_plano_inicial(dados: dict) -> str:
 
     prompt_usuario = f"""## CONTEXTO DESTA LOJA
 
-**Loja:** {dados.get('loja_nome','—')} | **Cluster:** {tipo_loja} | **Mês:** {dados.get('mes_nome','')} 2026
-**Equipe:** {equipe} consultores | **Principal desafio declarado:** {desafio}
-**Sazonalidade de {dados.get('mes_nome','')}:** {sazonalidade}
+**Loja:** {dados.get('loja_nome','—')} | **Cluster:** {tipo_loja} | **Mês:** {mes_nome} 2026
+**Sazonalidade de {mes_nome}:** {sazonalidade}
 
 ## METAS DO MÊS
 - Meta: **{_fmt_moeda(dados.get('meta'))}**
