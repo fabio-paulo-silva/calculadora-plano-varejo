@@ -508,116 +508,121 @@ else:
     st.warning(mensagem)
 
 # ── Seção IA: Plano personalizado + Chat estratégico ─────────────────────────
-
-st.markdown("---")
-st.markdown("##### ✨ Plano de Ação com IA")
-st.caption("Groq · LLaMA 3.3 70B · IAF 2026 — personalizado para esta loja")
-
-# Limpa histórico ao trocar loja ou mês
-llm_chave_atual = f"{bcps_selecionado}_{mes_selecionado}"
-if st.session_state.get("llm_chave") != llm_chave_atual:
+# Limpa histórico ao trocar loja ou mês (roda ANTES do fragment)
+_llm_chave_atual = f"{bcps_selecionado}_{mes_selecionado}"
+if st.session_state.get("llm_chave") != _llm_chave_atual:
     st.session_state["llm_plano"] = None
     st.session_state["llm_chat"]  = []
     st.session_state["llm_dados"] = {}
 
-def _montar_dados_llm():
-    loja_info_llm = dcentros[dcentros['BCPS'] == int(bcps_selecionado)]
-    li_llm = loja_info_llm.iloc[0] if not loja_info_llm.empty else {}
-    return {
-        "loja_nome": loja_map.get(int(bcps_selecionado), f"Loja {int(bcps_selecionado)}"),
-        "bcps":      int(bcps_selecionado),
-        "mes_nome":  NOMES_MESES.get(mes_selecionado, str(mes_selecionado)),
-        "regional":  li_llm.get("GRVO", "—") if hasattr(li_llm, "get") else "—",
-        "praca":     li_llm.get("PRACA", "—") if hasattr(li_llm, "get") else "—",
-        "meta":      meta,       "bol_proj": bol_proj,
-        "bm_nec":    bm_nec,     "ib_nec":   ib_nec,
-        "pm_nec":    pm_nec,     "bol_nec":  bol_nec,
-        "bm_ref":    bm_ref,     "ib_ref":   ib_ref,
-        "pm_ref":    pm_ref,     "bol_ref":  bol_ref,
-        "max_bm":    max_bm,     "max_ib":   max_ib,
-        "max_pm":    max_pm,     "max_bol":  max_bol,
-        "var_bm":    _safe(row.get("VAR_BM")), "var_ib": _safe(row.get("VAR_IB")),
-        "var_pm":    _safe(row.get("VAR_PM")), "var_bol": _safe(row.get("VAR_BOL")),
-        "foco":      st.session_state.get("llm_foco", "combinado"),
-    }
-
-# ── Foco + botão ──────────────────────────────────────────────────────────────
-foco_opcoes = {
-    "combinado": "🎯 Plano combinado",
-    "bm":        "📊 Foco em Boleto Médio",
-    "ib":        "📦 Foco em Itens por Boleto",
-    "pm":        "💰 Foco em Preço Médio",
-    "boletos":   "🚀 Foco em Boletos",
+# Captura variáveis necessárias dentro do fragment via snapshot
+_snap = {
+    "loja_nome": loja_map.get(int(bcps_selecionado), f"Loja {int(bcps_selecionado)}"),
+    "bcps":      int(bcps_selecionado),
+    "mes_nome":  NOMES_MESES.get(mes_selecionado, str(mes_selecionado)),
+    "regional":  dcentros[dcentros['BCPS'] == int(bcps_selecionado)].iloc[0].get("GRVO", "—")
+                 if not dcentros[dcentros['BCPS'] == int(bcps_selecionado)].empty else "—",
+    "praca":     dcentros[dcentros['BCPS'] == int(bcps_selecionado)].iloc[0].get("PRACA", "—")
+                 if not dcentros[dcentros['BCPS'] == int(bcps_selecionado)].empty else "—",
+    "meta":      meta,    "bol_proj": bol_proj,
+    "bm_nec":    bm_nec,  "ib_nec":   ib_nec,  "pm_nec": pm_nec,  "bol_nec": bol_nec,
+    "bm_ref":    bm_ref,  "ib_ref":   ib_ref,  "pm_ref": pm_ref,  "bol_ref": bol_ref,
+    "max_bm":    max_bm,  "max_ib":   max_ib,  "max_pm": max_pm,  "max_bol": max_bol,
+    "var_bm":    _safe(row.get("VAR_BM")), "var_ib": _safe(row.get("VAR_IB")),
+    "var_pm":    _safe(row.get("VAR_PM")), "var_bol": _safe(row.get("VAR_BOL")),
+    "llm_chave": _llm_chave_atual,
 }
-col_foco, col_btn_ia = st.columns([2, 1])
-with col_foco:
-    st.selectbox("Foco do plano", options=list(foco_opcoes.keys()),
-                 format_func=lambda k: foco_opcoes[k], key="llm_foco")
-with col_btn_ia:
-    st.write("")
-    gerar_llm = st.button("✨ Gerar Plano", use_container_width=True, type="primary")
+st.session_state["_snap"] = _snap   # disponível dentro do fragment
 
-if gerar_llm:
-    dados_llm = _montar_dados_llm()
-    with st.spinner("Gerando plano personalizado..."):
-        try:
-            plano = gerar_plano_inicial(dados_llm)
-            st.session_state["llm_plano"] = plano
-            st.session_state["llm_chave"] = llm_chave_atual
-            st.session_state["llm_dados"] = dados_llm
-            st.session_state["llm_chat"]  = [{"role": "assistant", "content": plano}]
-        except ValueError as e:
-            st.error(f"⚠️ {e}")
-        except Exception as e:
-            st.error(f"❌ Erro ao chamar a IA: {e}")
 
-# ── Exibe o plano gerado (compacto, sem chat) ─────────────────────────────────
-if st.session_state.get("llm_plano"):
-    with st.container(border=True):
-        st.markdown(st.session_state["llm_plano"])
+@st.fragment
+def secao_ia():
+    import re
+    snap      = st.session_state.get("_snap", {})
+    chave     = snap.get("llm_chave", "")
 
-    col_usar, _ = st.columns([2, 3])
-    with col_usar:
-        if st.button("📋 Usar este plano no Plano de Ação abaixo", key="usar_plano_llm"):
-            import re
-            plano_txt = st.session_state["llm_plano"]
-
-            def _extrair(texto, titulo):
-                m = re.search(
-                    rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)",
-                    texto, re.DOTALL | re.IGNORECASE
-                )
-                return m.group(1).strip() if m else ""
-
-            bm_ia  = _extrair(plano_txt, "Ação para Boleto Médio")
-            ib_ia  = _extrair(plano_txt, "Ação para Itens por Boleto")
-            pm_ia  = _extrair(plano_txt, "Ação para Preço Médio")
-            bol_ia = _extrair(plano_txt, "Ação para Boletos")
-
-            if bm_ia:  st.session_state["acao_bm"]      = bm_ia
-            if ib_ia:  st.session_state["acao_ib"]      = ib_ia
-            if pm_ia:  st.session_state["acao_pm"]      = pm_ia
-            if bol_ia: st.session_state["acao_boletos"] = bol_ia
-
-            st.success("Campos preenchidos! Revise e ajuste antes de salvar.")
-            st.rerun()
-
-    # ── Chat estratégico ──────────────────────────────────────────────────────
     st.markdown("---")
+    st.markdown("##### ✨ Plano de Ação com IA")
+    st.caption("Groq · LLaMA 3.3 70B · IAF 2026 — personalizado para esta loja")
+
+    # ── Foco + botão ──────────────────────────────────────────────────────────
+    foco_opcoes = {
+        "combinado": "🎯 Plano combinado",
+        "bm":        "📊 Foco em Boleto Médio",
+        "ib":        "📦 Foco em Itens por Boleto",
+        "pm":        "💰 Foco em Preço Médio",
+        "boletos":   "🚀 Foco em Boletos",
+    }
+    col_foco, col_btn_ia = st.columns([2, 1])
+    with col_foco:
+        st.selectbox("Foco do plano", options=list(foco_opcoes.keys()),
+                     format_func=lambda k: foco_opcoes[k], key="llm_foco")
+    with col_btn_ia:
+        st.write("")
+        gerar_llm = st.button("✨ Gerar Plano", use_container_width=True, type="primary")
+
+    if gerar_llm:
+        dados_llm = {**snap, "foco": st.session_state.get("llm_foco", "combinado")}
+        with st.spinner("Gerando plano personalizado..."):
+            try:
+                plano = gerar_plano_inicial(dados_llm)
+                st.session_state["llm_plano"] = plano
+                st.session_state["llm_chave"] = chave
+                st.session_state["llm_dados"] = dados_llm
+                st.session_state["llm_chat"]  = [{"role": "assistant", "content": plano}]
+            except ValueError as e:
+                st.error(f"⚠️ {e}")
+                return
+            except Exception as e:
+                st.error(f"❌ Erro ao chamar a IA: {e}")
+                return
+
+    # ── Plano gerado — recolhível ──────────────────────────────────────────────
+    if not st.session_state.get("llm_plano"):
+        return
+
+    plano_txt = st.session_state["llm_plano"]
+    ja_tinha  = not gerar_llm   # se não acabou de gerar, começa recolhido
+
+    with st.expander("📄 Ver / ocultar plano gerado", expanded=not ja_tinha):
+        st.markdown(plano_txt)
+
+        col_usar, _ = st.columns([2, 3])
+        with col_usar:
+            if st.button("📋 Usar nos campos do Plano de Ação", key="usar_plano_llm"):
+                def _ext(titulo):
+                    m = re.search(
+                        rf"###\s*{re.escape(titulo)}\s*\n(.*?)(?=\n###|\Z)",
+                        plano_txt, re.DOTALL | re.IGNORECASE
+                    )
+                    return m.group(1).strip() if m else ""
+
+                bm_ia  = _ext("Ação para Boleto Médio")
+                ib_ia  = _ext("Ação para Itens por Boleto")
+                pm_ia  = _ext("Ação para Preço Médio")
+                bol_ia = _ext("Ação para Boletos")
+
+                if bm_ia:  st.session_state["acao_bm"]      = bm_ia
+                if ib_ia:  st.session_state["acao_ib"]      = ib_ia
+                if pm_ia:  st.session_state["acao_pm"]      = pm_ia
+                if bol_ia: st.session_state["acao_boletos"] = bol_ia
+
+                st.success("Campos preenchidos! Revise abaixo antes de salvar.")
+
+    # ── Chat estratégico ───────────────────────────────────────────────────────
     st.markdown("##### 💬 Discuta sobre seu plano de ação com a IA")
     st.caption("Diga o que não é viável — a IA sugere alternativas baseadas no IAF e no contexto da sua loja.")
 
-    # Janela de chat rolável (mostra apenas mensagens da conversa, exceto o plano inicial)
-    mensagens_chat = st.session_state["llm_chat"][1:]  # pula o plano inicial
-    if mensagens_chat:
-        with st.container(height=320, border=True):
+    mensagens_chat = st.session_state["llm_chat"][1:]   # exclui o plano inicial
+
+    with st.container(height=300, border=True):
+        if mensagens_chat:
             for msg in mensagens_chat:
                 with st.chat_message(msg["role"], avatar="🤖" if msg["role"] == "assistant" else "👤"):
                     st.markdown(msg["content"])
-    else:
-        st.caption("_Nenhuma mensagem ainda. Use o campo abaixo para começar._")
+        else:
+            st.caption("_Nenhuma mensagem ainda. Use o campo abaixo para começar._")
 
-    # Input do chat
     msg_gestor = st.chat_input(
         "Ex: minha loja não tem estrutura para serviços, o que fazer?",
         key="chat_input_ia",
@@ -625,9 +630,8 @@ if st.session_state.get("llm_plano"):
 
     if msg_gestor:
         st.session_state["llm_chat"].append({"role": "user", "content": msg_gestor})
-
         if not st.session_state.get("llm_dados"):
-            st.session_state["llm_dados"] = _montar_dados_llm()
+            st.session_state["llm_dados"] = {**snap, "foco": st.session_state.get("llm_foco", "combinado")}
 
         with st.spinner("Pensando..."):
             try:
@@ -641,7 +645,10 @@ if st.session_state.get("llm_plano"):
                 st.session_state["llm_chat"].append({
                     "role": "assistant", "content": f"❌ Erro: {e}"
                 })
-        st.rerun()
+        st.rerun(scope="fragment")
+
+
+secao_ia()
 
 # Tabela comparativa com máximos históricos
 if hist_row is not None:
